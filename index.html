@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Momentum — habits & goals</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>Momentum</h1>
+    <span class="tagline">track habits · reverse-engineer goals</span>
+  </div>
+  <nav id="tabs">
+    <button data-tab="dashboard" class="active">Today</button>
+    <button data-tab="habits">Habits</button>
+    <button data-tab="goals">Goals</button>
+    <button data-tab="funnel">Funnels</button>
+  </nav>
+  <div class="data-actions">
+    <button id="export-btn" title="Download all data as JSON">Export</button>
+    <label class="import-label" title="Restore from a JSON export">Import<input type="file" id="import-input" accept=".json"></label>
+    <button id="settings-btn" title="Customise appearance">⚙ Customise</button>
+  </div>
+</header>
+
+<div id="settings-scrim" class="settings-scrim" hidden></div>
+<div id="settings-panel" class="settings-panel" hidden>
+  <div class="settings-panel-inner">
+    <div class="settings-head">
+      <h3>Customise</h3>
+      <button class="btn-link" id="settings-close-btn">Close</button>
+    </div>
+
+    <div class="settings-group">
+      <label class="settings-label">Theme</label>
+      <div class="segmented" id="setting-theme">
+        <button data-value="dark">🌙 Dark</button>
+        <button data-value="light">☀️ Light</button>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <label class="settings-label">Accent colour</label>
+      <div class="swatch-row" id="setting-accent"></div>
+    </div>
+
+    <div class="settings-group">
+      <label class="settings-label">Density</label>
+      <div class="segmented" id="setting-density">
+        <button data-value="comfortable">Comfortable</button>
+        <button data-value="compact">Compact</button>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <label class="settings-label">Corners</label>
+      <div class="segmented" id="setting-radius">
+        <button data-value="rounded">Rounded</button>
+        <button data-value="soft">Soft</button>
+        <button data-value="sharp">Sharp</button>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <label class="settings-label">Font</label>
+      <div class="segmented" id="setting-font">
+        <button data-value="system">System</button>
+        <button data-value="mono">Mono</button>
+        <button data-value="serif">Serif</button>
+      </div>
+    </div>
+
+    <button class="btn-link" id="settings-reset-btn">Reset to default</button>
+  </div>
+</div>
+
+<main>
+  <!-- TODAY / DASHBOARD -->
+  <section id="tab-dashboard" class="tab active">
+    <h2 id="today-heading"></h2>
+    <div class="dash-grid">
+      <div class="panel">
+        <h3>Today's habits</h3>
+        <div id="dash-habits"></div>
+      </div>
+      <div class="panel">
+        <h3>Goal pace</h3>
+        <div id="dash-goals"></div>
+      </div>
+      <div class="panel highlight">
+        <h3>Funnel snapshots</h3>
+        <div id="dash-funnels"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HABITS -->
+  <section id="tab-habits" class="tab">
+    <h2>Habits <span class="muted" id="week-label"></span></h2>
+    <form id="habit-form" class="inline-form">
+      <input type="text" id="habit-name" placeholder="New habit, e.g. Train, Script 30 min, 10 outreach DMs" required>
+      <select id="habit-type">
+        <option value="check">Check (done / not done)</option>
+        <option value="scale">Scale (log a number)</option>
+      </select>
+      <span id="check-fields" class="form-group">
+        <select id="habit-cadence-check">
+          <option value="7">Every day</option>
+          <option value="6">6× / week</option>
+          <option value="5">5× / week</option>
+          <option value="4">4× / week</option>
+          <option value="3">3× / week</option>
+          <option value="2">2× / week</option>
+          <option value="1">1× / week</option>
+        </select>
+      </span>
+      <span id="scale-fields" class="form-group">
+        <input type="text" id="habit-unit" placeholder="Unit, e.g. pages, min" class="narrow">
+        <select id="habit-mode">
+          <option value="weekly-total">Weekly total</option>
+          <option value="daily-target">Daily target</option>
+        </select>
+        <span id="weekly-total-fields" class="form-group">
+          <input type="number" id="habit-weekly-target" placeholder="Weekly target" min="0" step="any" class="narrow">
+        </span>
+        <span id="daily-target-fields" class="form-group">
+          <input type="number" id="habit-daily-target" placeholder="Daily target" min="0" step="any" class="narrow">
+          <select id="habit-cadence-scale">
+            <option value="7">Every day</option>
+            <option value="6">6× / week</option>
+            <option value="5">5× / week</option>
+            <option value="4">4× / week</option>
+            <option value="3">3× / week</option>
+            <option value="2">2× / week</option>
+            <option value="1">1× / week</option>
+          </select>
+        </span>
+      </span>
+      <button type="submit">Add habit</button>
+    </form>
+    <div id="habit-grid"></div>
+  </section>
+
+  <!-- GOALS -->
+  <section id="tab-goals" class="tab">
+    <h2>Goals</h2>
+    <p class="muted">Set the target and deadline — Momentum works out the daily pace and whether you're ahead or behind.</p>
+    <form id="goal-form" class="goal-form">
+      <input type="text" id="goal-title" placeholder="Goal, e.g. 1,000 subscribers" required>
+      <input type="number" id="goal-target" placeholder="Target #" min="1" step="any" required>
+      <input type="text" id="goal-unit" placeholder="Unit, e.g. subs" required>
+      <input type="number" id="goal-current" placeholder="Current" min="0" step="any" value="0">
+      <input type="date" id="goal-deadline" required>
+      <button type="submit">Add goal</button>
+    </form>
+    <div id="goal-list"></div>
+  </section>
+
+  <!-- FUNNELS -->
+  <section id="tab-funnel" class="tab">
+    <div class="tab-header-row">
+      <div>
+        <h2>Funnels</h2>
+        <p class="muted">Reverse-engineer any goal into an action number — revenue, subscribers, body weight, pages. A funnel automatically creates a linked goal and habit that stay in sync as you tweak it.</p>
+      </div>
+      <div class="new-funnel-wrap">
+        <button class="btn" id="add-funnel-btn">+ New funnel</button>
+        <div id="template-menu" class="template-menu" hidden>
+          <button data-template="blank">📄 Blank funnel</button>
+          <button data-template="revenue">💷 Revenue → daily outreach</button>
+          <button data-template="audience">📈 Subscribers → daily views</button>
+          <button data-template="bulk">🏋️ Body-weight bulk → daily calories</button>
+        </div>
+      </div>
+    </div>
+    <div id="funnel-list"></div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
