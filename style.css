@@ -597,6 +597,45 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
 }
 .settings-scrim[hidden] { display: none; }
 
+/* ---- backup / GitHub sync ---- */
+.backup-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.backup-toggle-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.backup-fields { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.backup-fields[data-off] { opacity: 0.5; pointer-events: none; }
+.backup-hint { font-size: 11px; line-height: 1.5; margin-top: 2px; }
+.backup-hint-link { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+.backup-status { font-size: 12px; min-height: 16px; }
+.backup-status.ok { color: var(--green); }
+.backup-status.err { color: var(--red); }
+
+.backup-banner {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 95;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+}
+.backup-banner[hidden] { display: none; }
+
 /* ---- calendar ---- */
 .calendar-controls { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
 .calendar-controls select { min-width: 200px; }

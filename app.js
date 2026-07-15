@@ -163,7 +163,10 @@ function load() {
 }
 
 let state = load();
-const save = () => localStorage.setItem(STORE_KEY, JSON.stringify(state));
+const save = () => {
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  scheduleGithubSync();
+};
 
 /* ---------- shared helpers ---------- */
 
@@ -390,6 +393,7 @@ document.getElementById("setting-accent-hex").addEventListener("change", (e) => 
 function openSettings() {
   document.getElementById("settings-panel").hidden = false;
   document.getElementById("settings-scrim").hidden = false;
+  populateBackupUI();
 }
 function closeSettings() {
   document.getElementById("settings-panel").hidden = true;
@@ -1328,6 +1332,126 @@ function deleteVacation(id) {
   renderVacationList();
 }
 
+/* ---------- backup: GitHub auto-sync + export reminder ----------
+   backupConfig (including the token) lives in its own localStorage key —
+   deliberately kept out of `state` so it never ends up in an Export file. */
+
+const BACKUP_CONFIG_KEY = "momentum-backup-config-v1";
+const BACKUP_FILE_PATH = "data-backup.json";
+const EXPORT_REMINDER_DAYS = 7;
+const SYNC_DEBOUNCE_MS = 8000;
+
+function loadBackupConfig() {
+  let raw;
+  try { raw = JSON.parse(localStorage.getItem(BACKUP_CONFIG_KEY)); } catch { raw = null; }
+  return Object.assign({ enabled: false, owner: "", repo: "", token: "", lastSync: null, lastExport: null, firstSeen: null }, raw || {});
+}
+
+let backupConfig = loadBackupConfig();
+const saveBackupConfig = () => localStorage.setItem(BACKUP_CONFIG_KEY, JSON.stringify(backupConfig));
+
+function setSyncStatus(text, isError) {
+  const el = document.getElementById("backup-status");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle("err", !!isError);
+  el.classList.toggle("ok", !isError && !!text);
+}
+
+let syncDebounceTimer = null;
+let syncInFlight = false;
+
+function scheduleGithubSync() {
+  if (!backupConfig.enabled || !backupConfig.token || !backupConfig.owner || !backupConfig.repo) return;
+  clearTimeout(syncDebounceTimer);
+  syncDebounceTimer = setTimeout(syncToGithub, SYNC_DEBOUNCE_MS);
+}
+
+async function syncToGithub() {
+  clearTimeout(syncDebounceTimer);
+  if (!backupConfig.enabled || !backupConfig.token || !backupConfig.owner || !backupConfig.repo) return;
+  if (syncInFlight) return;
+  syncInFlight = true;
+  setSyncStatus("Syncing…");
+  try {
+    const apiUrl = `https://api.github.com/repos/${backupConfig.owner}/${backupConfig.repo}/contents/${BACKUP_FILE_PATH}`;
+    const headers = { Authorization: `Bearer ${backupConfig.token}`, Accept: "application/vnd.github+json" };
+
+    let sha;
+    const getRes = await fetch(apiUrl, { headers });
+    if (getRes.ok) {
+      sha = (await getRes.json()).sha;
+    } else if (getRes.status !== 404) {
+      throw new Error(`GitHub error ${getRes.status} reading file`);
+    }
+
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(state, null, 2))));
+    const putRes = await fetch(apiUrl, {
+      method: "PUT",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ message: `Auto-backup ${new Date().toISOString()}`, content, sha }),
+    });
+    if (!putRes.ok) {
+      const err = await putRes.json().catch(() => ({}));
+      throw new Error(err.message || `GitHub error ${putRes.status}`);
+    }
+
+    backupConfig.lastSync = Date.now();
+    saveBackupConfig();
+    setSyncStatus(`Synced ${new Date(backupConfig.lastSync).toLocaleTimeString("en-GB")}`);
+  } catch (e) {
+    setSyncStatus(`Sync failed: ${e.message}`, true);
+  } finally {
+    syncInFlight = false;
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") syncToGithub();
+});
+
+function updateBackupFieldsUI() {
+  const fields = document.getElementById("backup-fields");
+  if (backupConfig.enabled) fields.removeAttribute("data-off");
+  else fields.setAttribute("data-off", "");
+}
+
+function populateBackupUI() {
+  document.getElementById("backup-enabled").checked = backupConfig.enabled;
+  document.getElementById("backup-owner").value = backupConfig.owner;
+  document.getElementById("backup-repo").value = backupConfig.repo;
+  document.getElementById("backup-token").value = backupConfig.token;
+  updateBackupFieldsUI();
+  if (backupConfig.lastSync) setSyncStatus(`Synced ${new Date(backupConfig.lastSync).toLocaleTimeString("en-GB")}`);
+}
+
+document.getElementById("backup-enabled").addEventListener("change", (e) => {
+  backupConfig.enabled = e.target.checked;
+  saveBackupConfig();
+  updateBackupFieldsUI();
+  if (backupConfig.enabled) scheduleGithubSync();
+});
+document.getElementById("backup-owner").addEventListener("change", (e) => { backupConfig.owner = e.target.value.trim(); saveBackupConfig(); });
+document.getElementById("backup-repo").addEventListener("change", (e) => { backupConfig.repo = e.target.value.trim(); saveBackupConfig(); });
+document.getElementById("backup-token").addEventListener("change", (e) => { backupConfig.token = e.target.value.trim(); saveBackupConfig(); });
+document.getElementById("backup-sync-now-btn").addEventListener("click", syncToGithub);
+
+/* ---- export reminder banner ---- */
+
+function checkExportReminder() {
+  if (!backupConfig.firstSeen) { backupConfig.firstSeen = Date.now(); saveBackupConfig(); }
+  const baseline = backupConfig.lastExport || backupConfig.firstSeen;
+  const daysSince = (Date.now() - baseline) / 86400000;
+  document.getElementById("backup-banner").hidden = daysSince < EXPORT_REMINDER_DAYS;
+}
+
+document.getElementById("backup-banner-dismiss-btn").addEventListener("click", () => {
+  document.getElementById("backup-banner").hidden = true;
+});
+document.getElementById("backup-banner-export-btn").addEventListener("click", () => {
+  document.getElementById("export-btn").click();
+});
+
 function expandFunnel(id) {
   expandedFunnelId = id;
   renderFunnels();
@@ -1704,6 +1828,9 @@ document.getElementById("export-btn").addEventListener("click", () => {
   a.download = `momentum-backup-${todayKey()}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
+  backupConfig.lastExport = Date.now();
+  saveBackupConfig();
+  document.getElementById("backup-banner").hidden = true;
 });
 
 document.getElementById("import-input").addEventListener("change", (e) => {
@@ -1995,3 +2122,5 @@ function renderAll() {
 }
 
 renderAll();
+checkExportReminder();
+if (backupConfig.enabled) syncToGithub();

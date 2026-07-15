@@ -23,6 +23,9 @@ python3 -m http.server 8000
 
 ## Data
 
-Export/Import buttons in the header back up or restore all data as a single JSON file.
+All app data (habits, goals, funnels, vacations) lives only in this browser's `localStorage` — it is never part of the git repo. Two ways to keep it safe:
+
+- **Export/Import** — buttons in the header, manual, downloads/restores a single JSON file. A dismissible banner nudges you to do this if it's been 7+ days since your last export.
+- **GitHub auto-sync** — Customise → Backup. Enter a GitHub username, repo, and a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) scoped to just that repo with "Contents: Read and write". Once enabled, every change is auto-synced (debounced ~8s after your last edit, plus on tab-hide) to `data-backup.json` in the repo. The token is stored only in this browser's `localStorage` (a separate key from the app data) and is **never** included in Export files — don't share your Export JSON and your token together, but the Export itself is always token-free.
 
 `demo-data.json` is a sample dataset (a few habits, goals, and both funnel types with a few weeks of history) — use Import to load it and see every feature populated at once.

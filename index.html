@@ -79,8 +79,31 @@
       </div>
     </div>
 
+    <div class="settings-group">
+      <label class="settings-label">Backup</label>
+      <label class="backup-toggle-row">
+        <span>Auto-sync to GitHub</span>
+        <input type="checkbox" id="backup-enabled">
+      </label>
+      <div class="backup-fields" id="backup-fields">
+        <input type="text" id="backup-owner" placeholder="GitHub username, e.g. Scram-lol">
+        <input type="text" id="backup-repo" placeholder="Repo name, e.g. momentum">
+        <input type="password" id="backup-token" placeholder="Personal access token (repo contents write)">
+        <button class="btn-link" id="backup-sync-now-btn">Sync now</button>
+        <p class="muted backup-hint">Create a fine-grained token scoped to just this repo with "Contents: Read and write" at
+          <span class="backup-hint-link">github.com/settings/personal-access-tokens/new</span>. Stored only in this browser, never in Export files.</p>
+        <p id="backup-status" class="backup-status"></p>
+      </div>
+    </div>
+
     <button class="btn-link" id="settings-reset-btn">Reset to default</button>
   </div>
+</div>
+
+<div id="backup-banner" class="backup-banner" hidden>
+  <span>📦 It's been a while since your last backup.</span>
+  <button class="btn-link" id="backup-banner-export-btn">Export now</button>
+  <button class="btn-link" id="backup-banner-dismiss-btn">Dismiss</button>
 </div>
 
 <div id="profile-scrim" class="settings-scrim" hidden></div>
