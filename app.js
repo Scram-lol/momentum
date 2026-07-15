@@ -792,6 +792,88 @@ function habitMetaLabel(h) {
   return `${fmt(h.dailyTarget, 1)} ${esc(h.unit)}/day, ${h.targetPerWeek}×/wk`;
 }
 
+function isMobileView() {
+  return window.matchMedia("(max-width: 640px)").matches;
+}
+
+// Mobile habit card — a vertical layout instead of the wide 7-day table, with a compact
+// week strip (7 dots) that fits the screen so there's no horizontal scrolling.
+function habitCardHtml(hRaw, days, tk) {
+  const h = resolveHabit(hRaw);
+  const isScale = h.type === "scale";
+  const isWeeklyTotal = isScale && h.mode === "weekly-total";
+  const funnel = hRaw.linkedFunnelId ? state.funnels.find((x) => x.id === hRaw.linkedFunnelId) : null;
+  const editable = !(funnel && hRaw.autoCreated);
+
+  if (editable && habitEditing.has(hRaw.id)) {
+    return `<div class="habit-card">${habitEditFormHtml(hRaw)}</div>`;
+  }
+
+  const quitTag = h.intent === "quit" ? `<span class="quit-tag">🚫 quitting</span>` : "";
+  const dayLetters = ["M", "T", "W", "T", "F", "S", "S"];
+  const strip = days.map((d, i) => {
+    const key = dateKey(d);
+    const future = key > tk;
+    const isToday = key === tk;
+    const skipped = !future && isSkipped(hRaw, key);
+    const doneState = isScale
+      ? (h.mode === "daily-target" ? isDone(h, key) : hRaw.logs[key] !== undefined)
+      : !!hRaw.checks[key];
+    let cls = "wk-dot";
+    let glyph = "";
+    if (isToday) cls += " wk-today";
+    if (future) cls += " wk-future";
+    else if (doneState) { cls += " wk-done"; glyph = !isScale && h.intent === "quit" ? "🚫" : isScale ? "" : "✓"; }
+    else if (skipped) { cls += " wk-skip"; glyph = "⏭"; }
+    else cls += " wk-miss";
+    const tap = (!future && !isScale) ? `onclick="toggleCheck('${hRaw.id}','${key}')"` : "";
+    return `<div class="wk-day"><span class="${cls}" ${tap}>${glyph}</span><span class="wk-lbl${isToday ? " wk-lbl-today" : ""}">${dayLetters[i]}</span></div>`;
+  }).join("");
+
+  const skippedToday = isSkipped(hRaw, tk);
+  let todayControl = "";
+  if (isScale) {
+    const val = hRaw.logs[tk];
+    todayControl = skippedToday
+      ? `<div class="hc-today"><span class="muted">Skipped today</span></div>`
+      : `<div class="hc-today">
+          <div class="scale-stepper">
+            <button class="step-btn" onclick="stepScaleLog('${hRaw.id}','${tk}',-1)">−</button>
+            <input type="number" class="scale-cell-inline" value="${val !== undefined ? val : ""}" step="any" min="0" placeholder="0" onchange="setScaleLog('${hRaw.id}','${tk}',this.value)">
+            <button class="step-btn" onclick="stepScaleLog('${hRaw.id}','${tk}',1)">+</button>
+          </div>
+          <span class="muted">${esc(h.unit)} today</span>
+        </div>`;
+  }
+
+  let weekSummary;
+  if (isWeeklyTotal) {
+    const sum = days.reduce((s, d) => s + (hRaw.logs[dateKey(d)] || 0), 0);
+    weekSummary = `${fmt(sum, 1)}/${fmt(h.weeklyTarget, 1)} ${esc(h.unit)} this week`;
+  } else {
+    const cnt = days.filter((d) => isDone(h, dateKey(d))).length;
+    weekSummary = `${cnt}/${h.targetPerWeek} this week · <span class="streak-badge">🔥 ${streak(h)}</span>`;
+  }
+
+  const skipBtn = `<button class="btn-link" onclick="toggleSkip('${hRaw.id}','${tk}')">${skippedToday ? "↺ Unskip" : "⏭ Skip today"}</button>`;
+
+  return `<div class="habit-card">
+    <div class="hc-head">
+      <div><div class="hc-name">${esc(h.name)}</div><div class="habit-meta">${habitMetaLabel(h)} ${quitTag}</div></div>
+      <button class="delete-btn" onclick="deleteHabit('${hRaw.id}')" title="Delete">✕</button>
+    </div>
+    ${todayControl}
+    <div class="wk-strip">${strip}</div>
+    <div class="hc-summary">${weekSummary}</div>
+    <div class="hc-actions">
+      ${funnel ? `<span class="linked-tag">${hRaw.autoCreated ? "⚡ auto" : "🔗 linked"}</span> <button class="btn-link" onclick="unlinkHabit('${hRaw.id}')">Unlink</button>` : ""}
+      ${editable ? `<button class="btn-link" onclick="toggleHabitEdit('${hRaw.id}')">✎ Edit</button>` : ""}
+      ${skipBtn}
+      ${renderHistory("habit", hRaw)}
+    </div>
+  </div>`;
+}
+
 function renderHabits() {
   const grid = document.getElementById("habit-grid");
   const days = weekDates();
@@ -802,6 +884,11 @@ function renderHabits() {
 
   if (!state.habits.length) {
     grid.innerHTML = `<p class="empty-note">No habits yet. Add the non-negotiables — training, scripting, outreach.</p>`;
+    return;
+  }
+
+  if (isMobileView()) {
+    grid.innerHTML = state.habits.map((hRaw) => habitCardHtml(hRaw, days, tk)).join("");
     return;
   }
 
@@ -863,6 +950,9 @@ function renderHabits() {
   html += `</tbody></table>`;
   grid.innerHTML = html;
 }
+
+// re-render the habits tab when crossing the mobile/desktop breakpoint (table <-> cards)
+window.matchMedia("(max-width: 640px)").addEventListener("change", () => renderHabits());
 
 /* ---------- goals ---------- */
 

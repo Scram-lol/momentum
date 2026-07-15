@@ -900,12 +900,54 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
   /* lift the backup nudge above the bar */
   .backup-banner { bottom: calc(86px + env(safe-area-inset-bottom)); }
 
-  /* ---- no sideways page scroll: the page never drifts; only genuinely-wide
-     widgets (the 7-day habit grid) scroll inside their own box ---- */
-  main { overflow-x: clip; }                 /* backstop: page body stays put */
-  #habit-grid { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  #habit-grid table { min-width: 460px; }    /* keep day cells usable, scroll within the grid */
-  /* shrink the funnel stage editor so its row fits a phone instead of overflowing */
-  .stage-row { grid-template-columns: 1fr 84px 74px auto auto auto; gap: 6px; }
+  /* ---- no sideways page scroll ---- */
+  main { overflow-x: clip; }
+
+  /* ---- header: compact icon actions in the top-right corner ---- */
+  header { flex-wrap: nowrap; gap: 10px; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+  .brand { flex: 1; min-width: 0; }
+  .brand h1 { font-size: 18px; }
+  .tagline { display: none; }
+  .data-actions { gap: 6px; flex: none; }
+  .data-actions button, .import-label {
+    width: 38px; height: 38px; padding: 0; font-size: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  #export-btn::before { content: "⬇️"; font-size: 16px; }
+  .import-label::before { content: "⬆️"; font-size: 16px; }
+  #vacation-btn::before { content: "🏖️"; font-size: 16px; }
+  #settings-btn::before { content: "⚙️"; font-size: 16px; }
+
+  /* ---- funnel stage editor: wrap onto two rows instead of overflowing ---- */
+  .stage-row { grid-template-columns: 1fr 1fr auto auto auto; gap: 6px; }
+  .stage-row .stage-label { grid-column: 1 / -1; }
   .stage-kind, .stage-value { min-width: 0; }
 }
+
+/* ---- mobile habit cards (replaces the wide 7-day table on phones) ---- */
+.habit-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.hc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.hc-name { font-size: 15px; font-weight: 600; }
+.hc-today { display: flex; align-items: center; gap: 10px; margin: 12px 0 2px; }
+.wk-strip { display: flex; justify-content: space-between; gap: 4px; margin: 12px 0 8px; }
+.wk-day { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+.wk-dot {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--panel-2);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px; color: transparent; cursor: pointer; user-select: none;
+}
+.wk-dot.wk-done { background: var(--green); border-color: var(--green); color: #0c2a1c; }
+.wk-dot.wk-skip { border-style: dashed; color: var(--muted); }
+.wk-dot.wk-today { border-color: var(--accent); border-width: 2px; }
+.wk-dot.wk-future { opacity: 0.35; cursor: default; }
+.wk-lbl { font-size: 10px; color: var(--muted); }
+.wk-lbl.wk-lbl-today { color: var(--accent); font-weight: 700; }
+.hc-summary { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.hc-actions { display: flex; flex-wrap: wrap; gap: 12px 14px; align-items: center; font-size: 13px; }
