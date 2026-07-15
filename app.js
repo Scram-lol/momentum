@@ -1334,7 +1334,23 @@ document.getElementById("vacation-submit-btn").addEventListener("click", () => {
 });
 
 function deleteVacation(id) {
-  state.vacations = state.vacations.filter((v) => v.id !== id);
+  const v = state.vacations.find((x) => x.id === id);
+  if (v) {
+    const tk = todayKey();
+    v.habitIds.forEach((hid) => {
+      const h = state.habits.find((x) => x.id === hid);
+      if (!h) return;
+      h.skips = h.skips || {};
+      // Freeze days already spent on vacation (before today) as excused skips, so turning
+      // the vacation off doesn't retroactively turn them into misses / break streaks.
+      for (let d = v.start; d < tk && d <= v.end; d = addDays(d, 1)) {
+        if (!habitLoggedOnDay(h, d)) h.skips[d] = true;
+      }
+      // ...but today (the day you turned it off) becomes active again — clear any skip on it.
+      delete h.skips[tk];
+    });
+  }
+  state.vacations = state.vacations.filter((x) => x.id !== id);
   save();
   renderAll();
   renderVacationList();

@@ -1,4 +1,4 @@
-const CACHE_NAME = "momentum-shell-v2";
+const CACHE_NAME = "momentum-shell-v3";
 const SHELL_FILES = [
   "./",            // the bare directory URL (what a browser tab opens)
   "./index.html",  // the start_url the installed app opens

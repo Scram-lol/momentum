@@ -899,4 +899,13 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
   body.density-compact main { padding-bottom: calc(78px + env(safe-area-inset-bottom)); }
   /* lift the backup nudge above the bar */
   .backup-banner { bottom: calc(86px + env(safe-area-inset-bottom)); }
+
+  /* ---- no sideways page scroll: the page never drifts; only genuinely-wide
+     widgets (the 7-day habit grid) scroll inside their own box ---- */
+  main { overflow-x: clip; }                 /* backstop: page body stays put */
+  #habit-grid { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #habit-grid table { min-width: 460px; }    /* keep day cells usable, scroll within the grid */
+  /* shrink the funnel stage editor so its row fits a phone instead of overflowing */
+  .stage-row { grid-template-columns: 1fr 84px 74px auto auto auto; gap: 6px; }
+  .stage-kind, .stage-value { min-width: 0; }
 }
