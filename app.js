@@ -431,6 +431,33 @@ document.querySelectorAll("#tabs button").forEach((btn) => {
   });
 });
 
+/* ---------- progress sub-nav (calendar / stats) ---------- */
+
+document.querySelectorAll("#progress-subnav button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#progress-subnav button").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".progress-view").forEach((v) => v.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("progress-" + btn.dataset.view).classList.add("active");
+  });
+});
+
+/* ---------- more menu ---------- */
+
+document.getElementById("more-menu-btn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  document.getElementById("more-menu").hidden = !document.getElementById("more-menu").hidden;
+});
+document.getElementById("more-menu").addEventListener("click", (e) => {
+  if (e.target.closest("#export-btn, #vacation-btn, #settings-btn, .import-label")) {
+    document.getElementById("more-menu").hidden = true;
+  }
+});
+document.addEventListener("click", (e) => {
+  const menu = document.getElementById("more-menu");
+  if (!menu.hidden && !e.target.closest("#more-menu, #more-menu-btn")) menu.hidden = true;
+});
+
 /* ---------- funnel math ---------- */
 
 function funnelStagesCompute(f) {

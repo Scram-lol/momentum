@@ -25,14 +25,16 @@
     <button data-tab="habits"><span class="tab-icon">✅</span><span class="tab-label">Habits</span></button>
     <button data-tab="goals"><span class="tab-icon">🎯</span><span class="tab-label">Goals</span></button>
     <button data-tab="funnel"><span class="tab-icon">🔻</span><span class="tab-label">Funnels</span></button>
-    <button data-tab="calendar"><span class="tab-icon">📅</span><span class="tab-label">Calendar</span></button>
-    <button data-tab="stats"><span class="tab-icon">📊</span><span class="tab-label">Stats</span></button>
+    <button data-tab="progress"><span class="tab-icon">📊</span><span class="tab-label">Progress</span></button>
   </nav>
   <div class="data-actions">
-    <button id="export-btn" title="Download all data as JSON">Export</button>
-    <label class="import-label" title="Restore from a JSON export">Import<input type="file" id="import-input" accept=".json"></label>
-    <button id="vacation-btn" title="Pause habits over a date range">🏖 Vacation</button>
-    <button id="settings-btn" title="Customise appearance">⚙ Customise</button>
+    <button id="more-menu-btn" class="icon-btn-lg" title="More">⋯</button>
+    <div id="more-menu" class="more-menu" hidden>
+      <button id="export-btn">Export data</button>
+      <label class="import-label">Import data<input type="file" id="import-input" accept=".json"></label>
+      <button id="vacation-btn">🏖 Vacation mode</button>
+      <button id="settings-btn">⚙ Customise</button>
+    </div>
   </div>
 </header>
 
@@ -343,29 +345,36 @@
     <div id="funnel-list"></div>
   </section>
 
-  <!-- CALENDAR -->
-  <section id="tab-calendar" class="tab">
-    <h2>Calendar</h2>
-    <p class="muted">Browse the full history of a single habit, month by month.</p>
-    <div class="calendar-controls">
-      <select id="calendar-habit-select"></select>
-      <div class="calendar-nav">
-        <button class="icon-btn" id="cal-prev-btn" title="Previous month">‹</button>
-        <span id="calendar-month-label"></span>
-        <button class="icon-btn" id="cal-next-btn" title="Next month">›</button>
-        <button class="btn-link" id="cal-today-btn">Today</button>
+  <!-- PROGRESS (calendar + stats) -->
+  <section id="tab-progress" class="tab">
+    <div class="tab-header-row">
+      <h2>Progress</h2>
+      <div class="segmented" id="progress-subnav">
+        <button data-view="calendar" class="active">Calendar</button>
+        <button data-view="stats">Stats</button>
       </div>
     </div>
-    <div id="calendar-grid"></div>
-    <div id="calendar-summary" class="calendar-summary"></div>
-  </section>
 
-  <!-- STATS -->
-  <section id="tab-stats" class="tab">
-    <h2>Stats</h2>
-    <p class="muted">How consistent you've actually been, last 30 days.</p>
-    <div id="stats-overview" class="stats-overview"></div>
-    <div id="stats-content" class="stats-grid"></div>
+    <div id="progress-calendar" class="progress-view active">
+      <p class="muted">Browse the full history of a single habit, month by month.</p>
+      <div class="calendar-controls">
+        <select id="calendar-habit-select"></select>
+        <div class="calendar-nav">
+          <button class="icon-btn" id="cal-prev-btn" title="Previous month">‹</button>
+          <span id="calendar-month-label"></span>
+          <button class="icon-btn" id="cal-next-btn" title="Next month">›</button>
+          <button class="btn-link" id="cal-today-btn">Today</button>
+        </div>
+      </div>
+      <div id="calendar-grid"></div>
+      <div id="calendar-summary" class="calendar-summary"></div>
+    </div>
+
+    <div id="progress-stats" class="progress-view">
+      <p class="muted">How consistent you've actually been, last 30 days.</p>
+      <div id="stats-overview" class="stats-overview"></div>
+      <div id="stats-content" class="stats-grid"></div>
+    </div>
   </section>
 </main>
 

@@ -118,17 +118,47 @@ nav#tabs button.active {
 }
 .tab-icon { display: none; }  /* desktop shows text labels only — unchanged */
 
-.data-actions { display: flex; gap: 8px; align-items: center; }
-.data-actions button, .import-label {
+.data-actions { position: relative; display: flex; gap: 8px; align-items: center; }
+.icon-btn-lg {
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--muted);
-  padding: 6px 14px;
+  width: 38px; height: 38px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
 }
-.data-actions button:hover, .import-label:hover { color: var(--text); }
+.icon-btn-lg:hover { color: var(--text); border-color: var(--accent); }
+.more-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 30;
+  min-width: 180px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.more-menu[hidden] { display: none; }
+.more-menu button, .import-label {
+  background: none;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  width: 100%;
+  display: block;
+}
+.more-menu button:hover, .import-label:hover { background: var(--panel-2); }
 .import-label input { display: none; }
 
 main {
@@ -143,6 +173,8 @@ main {
 
 .tab { display: none; }
 .tab.active { display: block; }
+.progress-view { display: none; }
+.progress-view.active { display: block; }
 
 h2 { font-size: 22px; margin-bottom: 16px; }
 h3 { font-size: 15px; margin-bottom: 12px; }
@@ -261,15 +293,19 @@ button[type="submit"]:hover, .btn:hover { filter: brightness(1.1); }
 .check-cell.future { opacity: 0.3; cursor: default; }
 td.skipped-cell { background: color-mix(in srgb, var(--muted) 10%, transparent); }
 td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style: italic; }
-.streak-badge {
+/* shared pill treatment — every secondary status/label badge in the app renders
+   from this one shape (streak, linked, quit-intent, milestone) so they read as
+   one visual language instead of each looking like a different component */
+.streak-badge, .linked-tag, .quit-tag, .milestone-chip {
+  display: inline-block;
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 3px 10px;
   font-size: 12px;
-  color: var(--amber);
   white-space: nowrap;
 }
+.streak-badge { color: var(--amber); }
 .delete-btn {
   background: none; border: none;
   color: var(--muted); cursor: pointer;
@@ -342,15 +378,7 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
 }
 .milestone-tick.achieved { background: var(--text); }
 .milestone-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
-.milestone-chip {
-  font-size: 12px;
-  color: var(--muted);
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 3px 10px;
-  white-space: nowrap;
-}
+.milestone-chip { color: var(--muted); }
 .milestone-chip.achieved { color: var(--green); border-color: var(--green); background: rgba(62,207,142,0.1); }
 .milestone-edit-rows { display: flex; flex-direction: column; gap: 8px; }
 .milestone-edit-row { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 8px; align-items: center; }
@@ -398,25 +426,9 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
 .narrow { width: 110px !important; }
 
 /* ---- linking / history ---- */
-.linked-tag {
-  background: var(--panel-2);
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  border-radius: 20px;
-  padding: 2px 10px;
-  font-size: 12px;
-  white-space: nowrap;
-}
+.linked-tag { border-color: var(--accent); color: var(--accent); }
 .linked-row { margin: 8px 0 12px; display: flex; gap: 10px; align-items: center; }
-.quit-tag {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 20px;
-  padding: 1px 8px;
-  font-size: 11px;
-  white-space: nowrap;
-}
+.quit-tag { color: var(--muted); padding: 2px 8px; font-size: 11px; }
 .linked-list { margin: 10px 0; font-size: 13px; }
 .history { margin-top: 12px; font-size: 12px; color: var(--muted); }
 .history summary { cursor: pointer; }
@@ -933,14 +945,6 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
   .brand h1 { font-size: 18px; }
   .tagline { display: none; }
   .data-actions { gap: 6px; flex: none; }
-  .data-actions button, .import-label {
-    width: 38px; height: 38px; padding: 0; font-size: 0;
-    display: inline-flex; align-items: center; justify-content: center;
-  }
-  #export-btn::before { content: "⬇️"; font-size: 16px; }
-  .import-label::before { content: "⬆️"; font-size: 16px; }
-  #vacation-btn::before { content: "🏖️"; font-size: 16px; }
-  #settings-btn::before { content: "⚙️"; font-size: 16px; }
 
   /* ---- funnel stage editor: wrap onto two rows instead of overflowing ---- */
   .stage-row { grid-template-columns: 1fr 1fr auto auto auto; gap: 6px; }
@@ -977,14 +981,14 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
 .hc-actions { display: flex; flex-wrap: wrap; gap: 12px 14px; align-items: center; font-size: 13px; }
 
 /* ---- micro-interactions: make clicks/taps feel responsive on both platforms ---- */
-button, .btn, .btn-link, nav#tabs button, .check-cell, .step-btn, .icon-btn, .swatch,
-.funnel-row, .goal-card, .stat-card, .stat-tile, .wk-dot, .data-actions button,
+button, .btn, .btn-link, nav#tabs button, .check-cell, .step-btn, .icon-btn, .icon-btn-lg, .swatch,
+.funnel-row, .goal-card, .stat-card, .stat-tile, .wk-dot, .more-menu button,
 .import-label, .segmented button, .skip-btn, .vacation-habit-row {
   transition: background-color 0.13s ease, border-color 0.13s ease, color 0.13s ease,
               transform 0.08s ease, filter 0.13s ease, box-shadow 0.13s ease;
 }
-button:active, .btn:active, .check-cell:active, .step-btn:active, .icon-btn:active,
-.data-actions button:active, .import-label:active, .segmented button:active,
+button:active, .btn:active, .check-cell:active, .step-btn:active, .icon-btn:active, .icon-btn-lg:active,
+.more-menu button:active, .import-label:active, .segmented button:active,
 .wk-dot:active, .swatch:active, .skip-btn:active {
   transform: scale(0.93);
 }
