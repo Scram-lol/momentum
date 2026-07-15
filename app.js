@@ -40,7 +40,33 @@ function weekDates() {
 /* ---------- state ---------- */
 
 function defaults() {
-  return { habits: [], goals: [], funnels: [] };
+  return { habits: [], goals: [], funnels: [], profile: defaultProfile() };
+}
+
+function defaultProfile() {
+  return { weightKg: null, heightCm: null, age: null, sex: "male", activity: "light" };
+}
+
+function normalizeProfile(p) {
+  return Object.assign(defaultProfile(), p || {});
+}
+
+const ACTIVITY_MULTIPLIERS = {
+  sedentary: 1.2,
+  light: 1.375,
+  moderate: 1.55,
+  active: 1.725,
+  very_active: 1.9,
+};
+
+// Mifflin-St Jeor
+function calcBMR(p) {
+  const base = 10 * p.weightKg + 6.25 * p.heightCm - 5 * p.age;
+  return p.sex === "female" ? base - 161 : base + 5;
+}
+
+function calcTDEE(p) {
+  return calcBMR(p) * (ACTIVITY_MULTIPLIERS[p.activity] || 1.375);
 }
 
 function migrateFunnel(old) {
@@ -88,6 +114,7 @@ function normalizeFunnel(f) {
     actionUnit: "",
     autoGoal: false,
     autoHabit: false,
+    dailyOffset: null,
     editLog: [],
   }, f);
 }
@@ -105,6 +132,7 @@ function hydrate(raw) {
   s.habits = (s.habits || []).map(normalizeHabit);
   s.goals = (s.goals || []).map(normalizeGoal);
   s.funnels = (s.funnels || []).map(normalizeFunnel);
+  s.profile = normalizeProfile(s.profile);
   return s;
 }
 
@@ -254,6 +282,15 @@ function applySettings() {
     });
   }
   accentRow?.querySelectorAll(".swatch").forEach((sw) => sw.classList.toggle("selected", sw.dataset.value === settings.accent));
+
+  const picker = document.getElementById("setting-accent-picker");
+  const hexInput = document.getElementById("setting-accent-hex");
+  if (picker && document.activeElement !== picker) picker.value = settings.accent;
+  if (hexInput && document.activeElement !== hexInput) hexInput.value = settings.accent;
+}
+
+function isValidHex(s) {
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(s);
 }
 
 function updateSetting(key, value) {
@@ -273,6 +310,16 @@ document.getElementById("setting-radius").addEventListener("click", (e) => {
 });
 document.getElementById("setting-font").addEventListener("click", (e) => {
   const btn = e.target.closest("button"); if (btn) updateSetting("font", btn.dataset.value);
+});
+document.getElementById("setting-accent-picker").addEventListener("input", (e) => updateSetting("accent", e.target.value));
+document.getElementById("setting-accent-hex").addEventListener("change", (e) => {
+  const v = e.target.value.trim();
+  if (isValidHex(v)) {
+    const full = v.length === 4 ? "#" + v.slice(1).split("").map((c) => c + c).join("") : v;
+    updateSetting("accent", full.toLowerCase());
+  } else {
+    e.target.value = settings.accent;
+  }
 });
 
 function openSettings() {
@@ -316,16 +363,22 @@ function funnelStagesCompute(f) {
     else running = running * st.value; // multiply
     rows.push({ label: st.label, value: running, kind: st.kind, rateValue: st.value });
   });
-  const perDay = f.days > 0 ? running / f.days : NaN;
-  const perWeek = f.days > 0 ? running / (f.days / 7) : NaN;
-  const perMonth = f.days > 0 ? running / (f.days / 30.44) : NaN;
+  const offset = Number(f.dailyOffset) || 0;
+  const rawPerDay = f.days > 0 ? running / f.days : NaN;
+  const rawPerWeek = f.days > 0 ? running / (f.days / 7) : NaN;
+  const rawPerMonth = f.days > 0 ? running / (f.days / 30.44) : NaN;
+  const perDay = rawPerDay + offset;
+  const perWeek = rawPerWeek + offset * 7;
+  const perMonth = rawPerMonth + offset * 30.44;
   const cadence = f.cadence || "day";
   const cadenceValue = cadence === "day" ? perDay : cadence === "week" ? perWeek : cadence === "month" ? perMonth : running;
   const cadenceLabel = cadence === "day" ? "/day" : cadence === "week" ? "/week" : cadence === "month" ? "/month" : "total";
-  return { rows, finalValue: running, perDay, perWeek, perMonth, cadenceValue, cadenceLabel, cadence };
+  const cadenceRaw = cadence === "day" ? rawPerDay : cadence === "week" ? rawPerWeek : cadence === "month" ? rawPerMonth : running;
+  return { rows, finalValue: running, perDay, perWeek, perMonth, cadenceValue, cadenceLabel, cadence, offset, cadenceRaw };
 }
 
 function lastStageLabel(f) {
+  if (f.dailyOffset != null) return "Calories";
   return f.stages.length ? f.stages[f.stages.length - 1].label : f.title;
 }
 
@@ -487,6 +540,15 @@ function setScaleLog(habitId, key, rawValue) {
   const v = rawValue === "" ? undefined : Number(rawValue);
   if (v === undefined || !isFinite(v)) delete h.logs[key];
   else h.logs[key] = v;
+  save();
+  renderAll();
+}
+
+function stepScaleLog(habitId, key, delta) {
+  const h = state.habits.find((x) => x.id === habitId);
+  if (!h) return;
+  const next = Math.max(0, (Number(h.logs[key]) || 0) + delta);
+  h.logs[key] = next;
   save();
   renderAll();
 }
@@ -855,17 +917,6 @@ const FUNNEL_TEMPLATES = {
       { id: uid(), label: "Views needed", kind: "percent", value: 2 },
     ],
   }),
-  bulk: () => ({
-    title: "Bulk to 80kg",
-    unit: "kg",
-    actionUnit: "kcal",
-    goalValue: 8,
-    days: 122,
-    cadence: "day",
-    stages: [
-      { id: uid(), label: "Calorie surplus", kind: "multiply", value: 7700 },
-    ],
-  }),
 };
 
 document.getElementById("add-funnel-btn").addEventListener("click", (e) => {
@@ -882,13 +933,12 @@ document.addEventListener("click", (e) => {
 document.querySelectorAll("#template-menu button").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.getElementById("template-menu").hidden = true;
-    createFunnelFromTemplate(btn.dataset.template);
+    if (btn.dataset.template === "bulk") openProfileModal();
+    else createFunnelFromTemplate(btn.dataset.template);
   });
 });
 
-function createFunnelFromTemplate(key) {
-  const tpl = (FUNNEL_TEMPLATES[key] || FUNNEL_TEMPLATES.blank)();
-  const f = normalizeFunnel(Object.assign({ id: uid(), autoGoal: true, autoHabit: true }, tpl));
+function finalizeNewFunnel(f) {
   state.funnels.push(f);
   ensureAutoItems(f);
   expandedFunnelId = f.id;
@@ -902,6 +952,87 @@ function createFunnelFromTemplate(key) {
     if (title) { title.focus(); title.select(); }
   }
 }
+
+function createFunnelFromTemplate(key) {
+  const tpl = (FUNNEL_TEMPLATES[key] || FUNNEL_TEMPLATES.blank)();
+  const f = normalizeFunnel(Object.assign({ id: uid(), autoGoal: true, autoHabit: true }, tpl));
+  finalizeNewFunnel(f);
+}
+
+/* ---------- profile modal (bulk funnel tailoring) ---------- */
+
+let profileModalTargetFunnelId = null;
+
+function openProfileModal(funnelId) {
+  profileModalTargetFunnelId = funnelId || null;
+  const p = state.profile;
+  document.getElementById("profile-weight").value = p.weightKg ?? "";
+  document.getElementById("profile-height").value = p.heightCm ?? "";
+  document.getElementById("profile-age").value = p.age ?? "";
+  document.getElementById("profile-sex").value = p.sex;
+  document.getElementById("profile-activity").value = p.activity;
+
+  const f = funnelId ? state.funnels.find((x) => x.id === funnelId) : null;
+  document.getElementById("profile-gain").value = f ? f.goalValue : 8;
+  document.getElementById("profile-days").value = f ? f.days : 122;
+  document.getElementById("profile-bulk-label").textContent = f ? "This funnel" : "This bulk";
+  document.getElementById("profile-submit-btn").textContent = f ? "Recalculate" : "Build funnel";
+
+  document.getElementById("profile-modal").hidden = false;
+  document.getElementById("profile-scrim").hidden = false;
+}
+
+function closeProfileModal() {
+  document.getElementById("profile-modal").hidden = true;
+  document.getElementById("profile-scrim").hidden = true;
+  profileModalTargetFunnelId = null;
+}
+
+document.getElementById("profile-cancel-btn").addEventListener("click", closeProfileModal);
+document.getElementById("profile-scrim").addEventListener("click", closeProfileModal);
+
+document.getElementById("profile-submit-btn").addEventListener("click", () => {
+  const weightKg = Number(document.getElementById("profile-weight").value);
+  const heightCm = Number(document.getElementById("profile-height").value);
+  const age = Number(document.getElementById("profile-age").value);
+  const sex = document.getElementById("profile-sex").value;
+  const activity = document.getElementById("profile-activity").value;
+  const gain = Number(document.getElementById("profile-gain").value);
+  const days = Number(document.getElementById("profile-days").value);
+  if (!weightKg || !heightCm || !age || !gain || !days) { alert("Fill in all fields."); return; }
+
+  state.profile = { weightKg, heightCm, age, sex, activity };
+  const tdee = calcTDEE(state.profile);
+
+  if (profileModalTargetFunnelId) {
+    const f = state.funnels.find((x) => x.id === profileModalTargetFunnelId);
+    if (f) {
+      const before = { dailyOffset: f.dailyOffset, goalValue: f.goalValue, days: f.days };
+      f.dailyOffset = tdee;
+      f.goalValue = gain;
+      f.days = days;
+      diffAndLog(f, before, { dailyOffset: f.dailyOffset, goalValue: f.goalValue, days: f.days }, "Recalculated from stats");
+    }
+    save();
+    closeProfileModal();
+    renderAll();
+    return;
+  }
+
+  const f = normalizeFunnel(Object.assign({ id: uid(), autoGoal: true, autoHabit: true }, {
+    title: `Gain ${fmt(gain, 1)}kg`,
+    unit: "kg",
+    actionUnit: "kcal",
+    goalValue: gain,
+    days,
+    cadence: "day",
+    dailyOffset: tdee,
+    stages: [{ id: uid(), label: "Calorie surplus", kind: "multiply", value: 7700 }],
+  }));
+  save();
+  closeProfileModal();
+  finalizeNewFunnel(f);
+});
 
 function expandFunnel(id) {
   expandedFunnelId = id;
@@ -951,7 +1082,7 @@ function deleteFunnel(id) {
 function updateFunnelField(funnelId, field, rawValue) {
   const f = state.funnels.find((x) => x.id === funnelId);
   if (!f) return;
-  f[field] = (field === "goalValue" || field === "days") ? Number(rawValue) : rawValue;
+  f[field] = (field === "goalValue" || field === "days" || field === "dailyOffset") ? Number(rawValue) : rawValue;
   save();
   updateFunnelCalc(funnelId);
   renderDashboard();
@@ -1085,7 +1216,10 @@ function funnelCalcHtml(f) {
   const bannerTitle = calc.cadence === "total" ? "Total needed" : "Action required";
   const alts = calc.cadence === "total" ? "" :
     `<div class="banner-alts">≈ ${fmt(calc.perDay, 1)}/day · ${fmt(calc.perWeek, 1)}/week · ${fmt(calc.perMonth, 1)}/month</div>`;
-  html += `<div class="daily-banner"><div><strong>${bannerTitle}</strong><span class="muted"> to hit ${fmt(f.goalValue, 1)} ${esc(f.unit)} in ${f.days} days</span>${alts}</div><div class="big-number">${fmt(calc.cadenceValue, 1)}<span class="muted" style="font-size:15px"> ${esc(actionUnit(f))} ${calc.cadenceLabel}</span></div></div>`;
+  const breakdown = calc.offset && calc.cadence !== "total"
+    ? `<div class="banner-breakdown">${fmt(calc.offset, 0)} maintenance + ${fmt(calc.cadenceRaw, 0)} ${calc.cadenceLabel.replace("/", "per ")} surplus</div>`
+    : "";
+  html += `<div class="daily-banner"><div><strong>${bannerTitle}</strong><span class="muted"> to hit ${fmt(f.goalValue, 1)} ${esc(f.unit)} in ${f.days} days</span>${alts}${breakdown}</div><div class="big-number">${fmt(calc.cadenceValue, 0)}<span class="muted" style="font-size:15px"> ${esc(actionUnit(f))} ${calc.cadenceLabel}</span></div></div>`;
   return html;
 }
 
@@ -1150,6 +1284,11 @@ function funnelEditorHtml(f) {
           <option value="total" ${f.cadence === "total" ? "selected" : ""}>Total only</option>
         </select>
       </div>
+      ${f.dailyOffset != null ? `<div class="f-input"><label>Maintenance (kcal/day)</label>
+        <input type="number" value="${Math.round(f.dailyOffset)}" step="1"
+          onfocus="trackFocus(event)" oninput="updateFunnelField('${f.id}','dailyOffset',this.value)" onblur="funnelFieldBlur('${f.id}','dailyOffset',event)">
+        <span class="hint"><button class="btn-link" style="padding:0;font-size:12px" onclick="openProfileModal('${f.id}')">↻ Recalculate from your stats</button></span>
+      </div>` : ""}
     </div>
     <h4 class="section-label">Stages (goal down to the action)</h4>
     <div class="stage-rows">${f.stages.map((st, i) => stageRowHtml(f, st, i, f.stages.length)).join("")}</div>
@@ -1199,8 +1338,12 @@ function renderDashboard() {
       const val = hRaw.logs[tk];
       const targetNote = h.mode === "weekly-total" ? ` / ${fmt(h.weeklyTarget, 1)} this wk` : ` / ${fmt(h.dailyTarget, 1)} target`;
       return `<div class="dash-habit-row">
-        <input type="number" class="scale-cell-inline" value="${val !== undefined ? val : ""}" step="any" min="0" placeholder="0"
-          onchange="setScaleLog('${hRaw.id}','${tk}',this.value)">
+        <div class="scale-stepper">
+          <button class="step-btn" onclick="stepScaleLog('${hRaw.id}','${tk}',-1)">−</button>
+          <input type="number" class="scale-cell-inline" value="${val !== undefined ? val : ""}" step="any" min="0" placeholder="0"
+            onchange="setScaleLog('${hRaw.id}','${tk}',this.value)">
+          <button class="step-btn" onclick="stepScaleLog('${hRaw.id}','${tk}',1)">+</button>
+        </div>
         <span class="name">${esc(h.name)} <span class="muted">${esc(h.unit)}${targetNote}</span></span>
       </div>`;
     }).join("");
@@ -1264,6 +1407,116 @@ document.getElementById("import-input").addEventListener("change", (e) => {
   });
 });
 
+/* ---------- calendar ---------- */
+
+let calendarHabitId = null;
+let calendarViewYear = new Date().getFullYear();
+let calendarViewMonth = new Date().getMonth();
+
+function populateCalendarHabitSelect() {
+  const sel = document.getElementById("calendar-habit-select");
+  if (!state.habits.length) {
+    sel.innerHTML = `<option value="">No habits yet</option>`;
+    calendarHabitId = null;
+    return;
+  }
+  if (!calendarHabitId || !state.habits.some((h) => h.id === calendarHabitId)) calendarHabitId = state.habits[0].id;
+  sel.innerHTML = state.habits.map((h) =>
+    `<option value="${h.id}" ${h.id === calendarHabitId ? "selected" : ""}>${esc(resolveHabit(h).name)}</option>`).join("");
+}
+
+document.getElementById("calendar-habit-select").addEventListener("change", (e) => {
+  calendarHabitId = e.target.value;
+  renderCalendar();
+});
+document.getElementById("cal-prev-btn").addEventListener("click", () => {
+  calendarViewMonth--;
+  if (calendarViewMonth < 0) { calendarViewMonth = 11; calendarViewYear--; }
+  renderCalendar();
+});
+document.getElementById("cal-next-btn").addEventListener("click", () => {
+  calendarViewMonth++;
+  if (calendarViewMonth > 11) { calendarViewMonth = 0; calendarViewYear++; }
+  renderCalendar();
+});
+document.getElementById("cal-today-btn").addEventListener("click", () => {
+  const now = new Date();
+  calendarViewYear = now.getFullYear();
+  calendarViewMonth = now.getMonth();
+  renderCalendar();
+});
+
+function renderCalendar() {
+  populateCalendarHabitSelect();
+  const grid = document.getElementById("calendar-grid");
+  const summaryEl = document.getElementById("calendar-summary");
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  document.getElementById("calendar-month-label").textContent = `${monthNames[calendarViewMonth]} ${calendarViewYear}`;
+
+  if (!calendarHabitId) {
+    grid.innerHTML = `<p class="empty-note">No habits yet — add one in the Habits tab.</p>`;
+    summaryEl.innerHTML = "";
+    return;
+  }
+  const hRaw = state.habits.find((h) => h.id === calendarHabitId);
+  if (!hRaw) { grid.innerHTML = ""; summaryEl.innerHTML = ""; return; }
+  const h = resolveHabit(hRaw);
+  const isScale = h.type === "scale";
+
+  const firstOfMonth = new Date(calendarViewYear, calendarViewMonth, 1);
+  const startDow = (firstOfMonth.getDay() + 6) % 7; // Mon=0
+  const daysInMonth = new Date(calendarViewYear, calendarViewMonth + 1, 0).getDate();
+  const tk = todayKey();
+
+  const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  let html = `<div class="cal-grid">`;
+  dayNames.forEach((d) => { html += `<div class="cal-dow">${d}</div>`; });
+  for (let i = 0; i < startDow; i++) html += `<div class="cal-cell empty"></div>`;
+
+  let doneCount = 0, pastCount = 0, loggedCount = 0, sum = 0;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key = dateKey(new Date(calendarViewYear, calendarViewMonth, day));
+    const isToday = key === tk;
+    const isFuture = key > tk;
+    let cellClass = "cal-cell";
+    let content = `<div class="cal-daynum">${day}</div>`;
+    if (isToday) cellClass += " cal-today";
+    if (!isFuture) pastCount++;
+
+    if (isScale) {
+      const val = hRaw.logs[key];
+      if (val !== undefined) {
+        loggedCount++; sum += val;
+        cellClass += " cal-has-value";
+        content += `<div class="cal-value">${fmt(val, 1)}</div>`;
+        if (h.mode === "daily-target" && h.dailyTarget > 0) {
+          const pct = Math.min(1, val / h.dailyTarget);
+          content += `<div class="cal-bar"><div style="width:${pct * 100}%"></div></div>`;
+        }
+      } else if (!isFuture) {
+        cellClass += " cal-empty-val";
+      }
+    } else {
+      const done = !!hRaw.checks[key];
+      if (done) { doneCount++; cellClass += " cal-done"; content += `<div class="cal-check">✓</div>`; }
+      else if (!isFuture) { cellClass += " cal-missed"; }
+    }
+    if (isFuture) cellClass += " cal-future";
+    html += `<div class="${cellClass}">${content}</div>`;
+  }
+  html += `</div>`;
+  grid.innerHTML = html;
+
+  if (isScale) {
+    summaryEl.innerHTML = `
+      <span><strong>${loggedCount}</strong> / ${pastCount} days logged</span>
+      <span><strong>${fmt(sum, 1)}</strong> ${esc(h.unit)} total this month</span>
+      <span><strong>${fmt(loggedCount ? sum / loggedCount : 0, 1)}</strong> ${esc(h.unit)} avg on logged days</span>`;
+  } else {
+    summaryEl.innerHTML = `<span><strong>${doneCount}</strong> / ${pastCount} done this month</span>`;
+  }
+}
+
 /* ---------- misc ---------- */
 
 function renderAll() {
@@ -1271,6 +1524,7 @@ function renderAll() {
   renderGoals();
   renderFunnels();
   renderDashboard();
+  renderCalendar();
 }
 
 renderAll();

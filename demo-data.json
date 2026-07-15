@@ -1,0 +1,221 @@
+{
+  "habits": [
+    {
+      "id": "habit-train",
+      "name": "Train",
+      "type": "check",
+      "targetPerWeek": 6,
+      "checks": {
+        "2026-06-27": true,
+        "2026-06-28": true,
+        "2026-06-29": true,
+        "2026-06-30": true,
+        "2026-07-01": true,
+        "2026-07-02": true,
+        "2026-07-04": true,
+        "2026-07-05": true,
+        "2026-07-06": true,
+        "2026-07-07": true,
+        "2026-07-08": true,
+        "2026-07-09": true,
+        "2026-07-10": true,
+        "2026-07-11": true,
+        "2026-07-12": true,
+        "2026-07-13": true,
+        "2026-07-14": true,
+        "2026-07-15": true
+      },
+      "logs": {},
+      "linkedFunnelId": null,
+      "autoCreated": false,
+      "editLog": []
+    },
+    {
+      "id": "habit-outreach",
+      "name": "Outreach DMs",
+      "type": "scale",
+      "unit": "DMs",
+      "mode": "daily-target",
+      "dailyTarget": 10,
+      "targetPerWeek": 5,
+      "checks": {},
+      "logs": {
+        "2026-06-27": 8,
+        "2026-06-28": 11,
+        "2026-06-29": 9,
+        "2026-07-01": 6,
+        "2026-07-02": 11,
+        "2026-07-04": 4,
+        "2026-07-05": 6,
+        "2026-07-07": 10,
+        "2026-07-09": 11,
+        "2026-07-10": 6,
+        "2026-07-11": 9
+      },
+      "linkedFunnelId": null,
+      "autoCreated": false,
+      "editLog": []
+    },
+    {
+      "id": "habit-script",
+      "name": "Script writing",
+      "type": "scale",
+      "unit": "min",
+      "mode": "weekly-total",
+      "weeklyTarget": 150,
+      "targetPerWeek": 7,
+      "checks": {},
+      "logs": {
+        "2026-07-09": 60,
+        "2026-07-10": 45,
+        "2026-07-11": 45,
+        "2026-07-12": 45,
+        "2026-07-14": 20,
+        "2026-07-15": 30
+      },
+      "linkedFunnelId": null,
+      "autoCreated": false,
+      "editLog": []
+    },
+    {
+      "id": "habit-calories",
+      "name": "Calories",
+      "type": "scale",
+      "unit": "kcal",
+      "mode": "daily-target",
+      "dailyTarget": 2839,
+      "targetPerWeek": 7,
+      "checks": {},
+      "logs": {
+        "2026-07-05": 2725,
+        "2026-07-06": 2794,
+        "2026-07-07": 2927,
+        "2026-07-08": 2712,
+        "2026-07-09": 3031,
+        "2026-07-10": 2628,
+        "2026-07-11": 2616,
+        "2026-07-13": 2633,
+        "2026-07-14": 2890
+      },
+      "linkedFunnelId": "funnel-bulk",
+      "autoCreated": true,
+      "editLog": []
+    }
+  ],
+  "goals": [
+    {
+      "id": "goal-subs",
+      "title": "1,000 subscribers",
+      "target": 1000,
+      "unit": "subs",
+      "current": 149,
+      "deadline": "2026-10-13",
+      "color": "#4f9cf9",
+      "created": "2026-06-27",
+      "linkedFunnelId": null,
+      "autoCreated": false,
+      "editLog": []
+    },
+    {
+      "id": "goal-bulk",
+      "title": "Gain 8kg",
+      "target": 8,
+      "unit": "kg",
+      "current": 2.3,
+      "deadline": "2026-10-27",
+      "color": "#3ecf8e",
+      "created": "2026-06-27",
+      "linkedFunnelId": "funnel-bulk",
+      "autoCreated": true,
+      "editLog": []
+    },
+    {
+      "id": "goal-revenue",
+      "title": "Coaching revenue",
+      "target": 10000,
+      "unit": "\u00a3",
+      "current": 0,
+      "deadline": "2026-10-13",
+      "color": "#f5b83d",
+      "created": "2026-06-27",
+      "linkedFunnelId": "funnel-revenue",
+      "autoCreated": true,
+      "editLog": []
+    }
+  ],
+  "funnels": [
+    {
+      "id": "funnel-bulk",
+      "title": "Gain 8kg",
+      "unit": "kg",
+      "actionUnit": "kcal",
+      "goalValue": 8,
+      "days": 122,
+      "cadence": "day",
+      "dailyOffset": 2334.06,
+      "stages": [
+        {
+          "id": "stage-bulk-1",
+          "label": "Calorie surplus",
+          "kind": "multiply",
+          "value": 7700
+        }
+      ],
+      "autoGoal": true,
+      "autoHabit": true,
+      "editLog": []
+    },
+    {
+      "id": "funnel-revenue",
+      "title": "Coaching revenue",
+      "unit": "\u00a3",
+      "actionUnit": "touches",
+      "goalValue": 10000,
+      "days": 90,
+      "cadence": "day",
+      "dailyOffset": null,
+      "stages": [
+        {
+          "id": "stage-rev-1",
+          "label": "Clients needed",
+          "kind": "ratio",
+          "value": 500
+        },
+        {
+          "id": "stage-rev-2",
+          "label": "Good-fit calls",
+          "kind": "percent",
+          "value": 30
+        },
+        {
+          "id": "stage-rev-3",
+          "label": "Show-ups",
+          "kind": "percent",
+          "value": 60
+        },
+        {
+          "id": "stage-rev-4",
+          "label": "Bookings",
+          "kind": "percent",
+          "value": 70
+        },
+        {
+          "id": "stage-rev-5",
+          "label": "Outreach touches",
+          "kind": "percent",
+          "value": 10
+        }
+      ],
+      "autoGoal": true,
+      "autoHabit": false,
+      "editLog": []
+    }
+  ],
+  "profile": {
+    "weightKg": 70,
+    "heightCm": 178,
+    "age": 24,
+    "sex": "male",
+    "activity": "light"
+  }
+}
