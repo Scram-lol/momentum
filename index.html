@@ -2,9 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Momentum — habits & goals</title>
 <link rel="stylesheet" href="style.css">
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f1115">
+<link rel="icon" href="icons/favicon-32.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Momentum">
 </head>
 <body>
 <header>
@@ -87,10 +95,10 @@
       </label>
       <div class="backup-fields" id="backup-fields">
         <input type="text" id="backup-owner" placeholder="GitHub username, e.g. Scram-lol">
-        <input type="text" id="backup-repo" placeholder="Repo name, e.g. momentum">
+        <input type="text" id="backup-repo" placeholder="Private data repo, e.g. momentum-data">
         <input type="password" id="backup-token" placeholder="Personal access token (repo contents write)">
         <button class="btn-link" id="backup-sync-now-btn">Sync now</button>
-        <p class="muted backup-hint">Create a fine-grained token scoped to just this repo with "Contents: Read and write" at
+        <p class="muted backup-hint">Use a <strong>private</strong> repo here, separate from the app's own code repo — this is where your actual data goes. Create a fine-grained token scoped to just that repo with "Contents: Read and write" at
           <span class="backup-hint-link">github.com/settings/personal-access-tokens/new</span>. Stored only in this browser, never in Export files.</p>
         <p id="backup-status" class="backup-status"></p>
       </div>

@@ -41,7 +41,7 @@ function weekDates() {
 /* ---------- state ---------- */
 
 function defaults() {
-  return { habits: [], goals: [], funnels: [], profile: defaultProfile(), vacations: [] };
+  return { habits: [], goals: [], funnels: [], profile: defaultProfile(), vacations: [], updatedAt: 0 };
 }
 
 function defaultProfile() {
@@ -163,8 +163,16 @@ function load() {
 }
 
 let state = load();
-const save = () => {
+
+// writes to localStorage only — no GitHub side effect. Used when applying data
+// that just came FROM GitHub, so a pull doesn't immediately trigger a redundant push.
+function persistLocal() {
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
+}
+
+const save = () => {
+  state.updatedAt = Date.now();
+  persistLocal();
   scheduleGithubSync();
 };
 
@@ -1367,6 +1375,42 @@ function scheduleGithubSync() {
   syncDebounceTimer = setTimeout(syncToGithub, SYNC_DEBOUNCE_MS);
 }
 
+function backupApiUrl() {
+  return `https://api.github.com/repos/${backupConfig.owner}/${backupConfig.repo}/contents/${BACKUP_FILE_PATH}`;
+}
+function backupHeaders() {
+  return { Authorization: `Bearer ${backupConfig.token}`, Accept: "application/vnd.github+json" };
+}
+function encodeStateB64() {
+  return btoa(unescape(encodeURIComponent(JSON.stringify(state, null, 2))));
+}
+function decodeContentB64(b64) {
+  return JSON.parse(decodeURIComponent(escape(atob(b64.replace(/\n/g, "")))));
+}
+
+// Pulls the remote backup and, if it's newer than what's local, replaces local
+// state with it. This is what makes two devices actually converge instead of
+// each one silently pushing its own version over the other's.
+async function pullFromGithub({ silent } = {}) {
+  if (!backupConfig.enabled || !backupConfig.token || !backupConfig.owner || !backupConfig.repo) return;
+  try {
+    const res = await fetch(backupApiUrl(), { headers: backupHeaders() });
+    if (res.status === 404) return; // nothing pushed yet from anywhere
+    if (!res.ok) throw new Error(`GitHub error ${res.status} pulling`);
+    const remote = decodeContentB64((await res.json()).content);
+    const remoteAt = remote.updatedAt || 0;
+    const localAt = state.updatedAt || 0;
+    if (remoteAt > localAt) {
+      state = hydrate(remote);
+      persistLocal();
+      renderAll();
+      if (!silent) setSyncStatus(`Pulled newer data from GitHub · ${new Date(remoteAt).toLocaleTimeString("en-GB")}`);
+    }
+  } catch (e) {
+    if (!silent) setSyncStatus(`Pull failed: ${e.message}`, true);
+  }
+}
+
 async function syncToGithub() {
   clearTimeout(syncDebounceTimer);
   if (!backupConfig.enabled || !backupConfig.token || !backupConfig.owner || !backupConfig.repo) return;
@@ -1374,22 +1418,19 @@ async function syncToGithub() {
   syncInFlight = true;
   setSyncStatus("Syncing…");
   try {
-    const apiUrl = `https://api.github.com/repos/${backupConfig.owner}/${backupConfig.repo}/contents/${BACKUP_FILE_PATH}`;
-    const headers = { Authorization: `Bearer ${backupConfig.token}`, Accept: "application/vnd.github+json" };
-
+    const headers = backupHeaders();
     let sha;
-    const getRes = await fetch(apiUrl, { headers });
+    const getRes = await fetch(backupApiUrl(), { headers });
     if (getRes.ok) {
       sha = (await getRes.json()).sha;
     } else if (getRes.status !== 404) {
       throw new Error(`GitHub error ${getRes.status} reading file`);
     }
 
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(state, null, 2))));
-    const putRes = await fetch(apiUrl, {
+    const putRes = await fetch(backupApiUrl(), {
       method: "PUT",
       headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ message: `Auto-backup ${new Date().toISOString()}`, content, sha }),
+      body: JSON.stringify({ message: `Auto-backup ${new Date().toISOString()}`, content: encodeStateB64(), sha }),
     });
     if (!putRes.ok) {
       const err = await putRes.json().catch(() => ({}));
@@ -1408,6 +1449,7 @@ async function syncToGithub() {
 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") syncToGithub();
+  else pullFromGithub();
 });
 
 function updateBackupFieldsUI() {
@@ -1434,7 +1476,7 @@ document.getElementById("backup-enabled").addEventListener("change", (e) => {
 document.getElementById("backup-owner").addEventListener("change", (e) => { backupConfig.owner = e.target.value.trim(); saveBackupConfig(); });
 document.getElementById("backup-repo").addEventListener("change", (e) => { backupConfig.repo = e.target.value.trim(); saveBackupConfig(); });
 document.getElementById("backup-token").addEventListener("change", (e) => { backupConfig.token = e.target.value.trim(); saveBackupConfig(); });
-document.getElementById("backup-sync-now-btn").addEventListener("click", syncToGithub);
+document.getElementById("backup-sync-now-btn").addEventListener("click", () => pullFromGithub().then(syncToGithub));
 
 /* ---- export reminder banner ---- */
 
@@ -2123,4 +2165,15 @@ function renderAll() {
 
 renderAll();
 checkExportReminder();
-if (backupConfig.enabled) syncToGithub();
+if (backupConfig.enabled) {
+  // pull first so a newer copy from the other device wins; then push, which
+  // catches any local-only changes that never made it up (e.g. last session
+  // closed before its debounced sync fired)
+  pullFromGithub().then(syncToGithub);
+}
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
