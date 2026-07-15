@@ -1,0 +1,29 @@
+{
+  "habits": [
+    {
+      "type": "check",
+      "intent": "build",
+      "targetPerWeek": 7,
+      "checks": {},
+      "logs": {},
+      "skips": {},
+      "linkedFunnelId": null,
+      "autoCreated": false,
+      "created": "2026-07-15",
+      "editLog": [],
+      "id": "e2k76c8g",
+      "name": "Test habit"
+    }
+  ],
+  "goals": [],
+  "funnels": [],
+  "profile": {
+    "weightKg": null,
+    "heightCm": null,
+    "age": null,
+    "sex": "male",
+    "activity": "light",
+    "bodyFatPct": null
+  },
+  "vacations": []
+}
