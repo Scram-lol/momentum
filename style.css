@@ -26,6 +26,11 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+html {
+  -webkit-text-size-adjust: 100%;   /* stop iOS auto-inflating text */
+  overscroll-behavior: none;        /* kill the rubber-band bounce that screams "webpage" */
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -33,6 +38,29 @@ body {
   line-height: 1.5;
   min-height: 100vh;
   transition: background 0.15s ease, color 0.15s ease;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;  /* no grey flash box on tap */
+  -webkit-touch-callout: none;               /* no long-press copy/callout on UI */
+  user-select: none;                         /* UI chrome isn't selectable text... */
+  touch-action: manipulation;                /* removes the 300ms tap delay + double-tap zoom */
+}
+/* ...but keep real text fields fully selectable/editable */
+input, textarea { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
+
+/* On touch devices: give a real "press" response, and stop hover styles from sticking
+   after a tap (both classic tells that this is a browser, not an app). */
+@media (hover: none) {
+  button:active, .btn:active, .btn-link:active, nav#tabs button:active,
+  .skip-btn:active, .check-cell:active, .step-btn:active, .swatch:active {
+    opacity: 0.55;
+    transition: opacity 0.05s;
+  }
+}
+
+/* iOS zooms the whole screen when you focus an input whose text is < 16px — the single
+   most jarring "this is a website" moment. 16px on small screens prevents it. */
+@media (max-width: 640px) {
+  input, select, textarea { font-size: 16px; }
 }
 
 /* ---- density: compact ---- */
@@ -58,6 +86,10 @@ header {
   gap: 24px;
   flex-wrap: wrap;
   padding: 16px 28px;
+  /* clear the status bar / notch / rounded corners (0 on desktop, so no change there) */
+  padding-top: max(16px, env(safe-area-inset-top));
+  padding-left: max(28px, env(safe-area-inset-left));
+  padding-right: max(28px, env(safe-area-inset-right));
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
@@ -98,7 +130,15 @@ nav#tabs button.active {
 .data-actions button:hover, .import-label:hover { color: var(--text); }
 .import-label input { display: none; }
 
-main { max-width: 1100px; margin: 0 auto; padding: 28px; }
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px;
+  /* keep content clear of side notches (landscape) and the home indicator */
+  padding-left: max(28px, env(safe-area-inset-left));
+  padding-right: max(28px, env(safe-area-inset-right));
+  padding-bottom: max(28px, env(safe-area-inset-bottom));
+}
 
 .tab { display: none; }
 .tab.active { display: block; }
@@ -553,7 +593,14 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
   overflow-y: auto;
 }
 .settings-panel[hidden] { display: none; }
-.settings-panel-inner { padding: 22px; display: flex; flex-direction: column; gap: 20px; }
+.settings-panel-inner {
+  padding: 22px;
+  padding-top: max(22px, env(safe-area-inset-top));
+  padding-bottom: max(22px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
 .settings-head { display: flex; align-items: center; justify-content: space-between; }
 .settings-head h3 { margin: 0; font-size: 16px; }
 .settings-group { display: flex; flex-direction: column; gap: 8px; }
@@ -620,7 +667,7 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
 
 .backup-banner {
   position: fixed;
-  bottom: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   z-index: 95;
