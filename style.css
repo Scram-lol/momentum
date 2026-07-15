@@ -323,13 +323,37 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
 .pace-done { background: rgba(245,184,61,0.15); color: var(--amber); }
 
 .progress-track {
+  position: relative;
   height: 10px;
   background: var(--panel-2);
   border-radius: 6px;
-  overflow: hidden;
+  overflow: visible;
   margin: 14px 0 10px;
 }
 .progress-fill { height: 100%; background: var(--accent); border-radius: 6px; }
+.milestone-tick {
+  position: absolute;
+  top: -3px;
+  width: 3px;
+  height: 16px;
+  background: var(--border);
+  border-radius: 2px;
+  transform: translateX(-1px);
+}
+.milestone-tick.achieved { background: var(--text); }
+.milestone-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
+.milestone-chip {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.milestone-chip.achieved { color: var(--green); border-color: var(--green); background: rgba(62,207,142,0.1); }
+.milestone-edit-rows { display: flex; flex-direction: column; gap: 8px; }
+.milestone-edit-row { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 8px; align-items: center; }
 .goal-stats { display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 .goal-stats strong { color: var(--text); font-size: 15px; display: block; }
 .goal-actions { margin-top: 14px; display: flex; gap: 8px; align-items: center; }

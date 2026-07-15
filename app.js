@@ -123,6 +123,7 @@ function normalizeGoal(g) {
     created: todayKey(),
     linkedFunnelId: null,
     autoCreated: false,
+    milestones: [],
     editLog: [],
   }, g);
 }
@@ -999,6 +1000,63 @@ function goalMath(g) {
   return { daysLeft, remaining, perDay, progressPct, pace, paceClass };
 }
 
+function sortedMilestones(g) {
+  return (g.milestones || []).slice().sort((a, b) => a.value - b.value);
+}
+
+function nextMilestone(g) {
+  const current = Number(g.current) || 0;
+  return sortedMilestones(g).find((ms) => Number(ms.value) > current) || null;
+}
+
+function milestoneTicksHtml(g) {
+  const ms = sortedMilestones(g);
+  if (!ms.length || !(g.target > 0)) return "";
+  const current = Number(g.current) || 0;
+  return ms.map((m) => {
+    const pct = Math.min(100, Math.max(0, (Number(m.value) / g.target) * 100));
+    const achieved = current >= Number(m.value);
+    return `<div class="milestone-tick ${achieved ? "achieved" : ""}" style="left:${pct}%" title="${esc(m.label ? `${fmt(m.value, 1)} — ${m.label}` : fmt(m.value, 1))}"></div>`;
+  }).join("");
+}
+
+function milestoneChipsHtml(g) {
+  const ms = sortedMilestones(g);
+  if (!ms.length) return "";
+  const current = Number(g.current) || 0;
+  const chips = ms.map((m) => {
+    const achieved = current >= Number(m.value);
+    const label = m.label ? ` · ${esc(m.label)}` : "";
+    return `<span class="milestone-chip ${achieved ? "achieved" : ""}">${achieved ? "✓" : "○"} ${fmt(m.value, 1)}${label}</span>`;
+  }).join("");
+  return `<div class="milestone-row">${chips}</div>`;
+}
+
+function milestoneRowHtml(ms) {
+  return `<div class="milestone-edit-row">
+    <input type="number" step="any" placeholder="Value" value="${ms.value ?? ""}" class="ms-value">
+    <input type="text" placeholder="Label (optional)" value="${esc(ms.label || "")}" class="ms-label">
+    <button type="button" class="delete-btn" onclick="this.closest('.milestone-edit-row').remove()" title="Remove">✕</button>
+  </div>`;
+}
+
+function addMilestoneRow(goalId) {
+  const container = document.getElementById(`milestone-rows-${goalId}`);
+  if (!container) return;
+  container.insertAdjacentHTML("beforeend", milestoneRowHtml({}));
+}
+
+function readMilestoneRows(goalId) {
+  const rows = document.querySelectorAll(`#milestone-rows-${goalId} .milestone-edit-row`);
+  const result = [];
+  rows.forEach((row) => {
+    const v = Number(row.querySelector(".ms-value").value);
+    const l = row.querySelector(".ms-label").value.trim();
+    if (isFinite(v)) result.push({ id: uid(), value: v, label: l });
+  });
+  return result.sort((a, b) => a.value - b.value);
+}
+
 function updateGoalProgress(id) {
   const g = state.goals.find((x) => x.id === id);
   const input = document.getElementById("gp-" + id);
@@ -1061,6 +1119,16 @@ function saveGoalEdit(id) {
     if (d) g.deadline = d;
   }
   g.color = document.getElementById(`ge-color-${id}`).value;
+
+  const oldMilestones = g.milestones || [];
+  const newMilestones = readMilestoneRows(id);
+  const oldKey = JSON.stringify(oldMilestones.map((m) => `${m.value}:${m.label}`));
+  const newKey = JSON.stringify(newMilestones.map((m) => `${m.value}:${m.label}`));
+  if (oldKey !== newKey) {
+    pushEditLog(g, "milestones", `${oldMilestones.length} checkpoint(s)`, `${newMilestones.length} checkpoint(s)`, note);
+  }
+  g.milestones = newMilestones;
+
   diffAndLog(g, before, { title: g.title, target: g.target, unit: g.unit, deadline: g.deadline, color: g.color }, note);
   goalEditing.delete(id);
   save();
@@ -1108,6 +1176,11 @@ function goalCardHtml(g) {
           ${PALETTE.map((c) => `<span class="swatch ${c === g.color ? "selected" : ""}" style="background:${c}" onclick="pickColor('${g.id}','${c}',this)"></span>`).join("")}
         </div>
         <input type="hidden" id="ge-color-${g.id}" value="${g.color}">
+        <label class="muted">Milestones — checkpoints along the way to the target</label>
+        <div class="milestone-edit-rows" id="milestone-rows-${g.id}">
+          ${(g.milestones || []).map(milestoneRowHtml).join("")}
+        </div>
+        <button type="button" class="btn-link" onclick="addMilestoneRow('${g.id}')">+ Add milestone</button>
         <textarea id="ge-note-${g.id}" placeholder="What changed and why? (optional)"></textarea>
         <div class="goal-actions">
           <button class="btn" onclick="saveGoalEdit('${g.id}')">Save</button>
@@ -1125,7 +1198,8 @@ function goalCardHtml(g) {
       <button class="delete-btn" onclick="deleteGoal('${g.id}')" title="Delete">✕</button>
     </div>
     ${linkedTag ? `<div class="linked-row">${linkedTag}</div>` : ""}
-    <div class="progress-track"><div class="progress-fill" style="width:${m.progressPct}%;background:${g.color}"></div></div>
+    <div class="progress-track"><div class="progress-fill" style="width:${m.progressPct}%;background:${g.color}"></div>${milestoneTicksHtml(rg)}</div>
+    ${milestoneChipsHtml(rg)}
     <div class="goal-stats">
       <span><strong>${fmt(g.current, 0)} / ${fmt(rg.target, 0)}</strong> ${esc(rg.unit)}</span>
       <span><strong>${m.daysLeft}</strong> days left</span>
@@ -1950,9 +2024,11 @@ function renderDashboard() {
     goalBox.innerHTML = state.goals.map((g) => {
       const rg = resolveGoal(g);
       const m = goalMath(rg);
+      const next = nextMilestone(rg);
+      const nextHtml = next ? ` · next checkpoint: ${fmt(next.value, 1)}${next.label ? " " + esc(next.label) : ""}` : "";
       return `<div class="dash-goal-row" style="border-left:3px solid ${g.color};padding-left:8px;">
         <span class="pace-tag ${m.paceClass}">${m.pace}</span> ${esc(rg.title)}
-        <div class="sub">${fmt(m.perDay, 1)} ${esc(rg.unit)}/day for ${m.daysLeft} more days</div>
+        <div class="sub">${fmt(m.perDay, 1)} ${esc(rg.unit)}/day for ${m.daysLeft} more days${nextHtml}</div>
       </div>`;
     }).join("");
   }
