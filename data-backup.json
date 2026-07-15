@@ -1,0 +1,15 @@
+{
+  "habits": [],
+  "goals": [],
+  "funnels": [],
+  "profile": {
+    "weightKg": null,
+    "heightCm": null,
+    "age": null,
+    "sex": "male",
+    "activity": "light",
+    "bodyFatPct": null
+  },
+  "vacations": [],
+  "updatedAt": 0
+}
