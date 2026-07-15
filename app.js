@@ -4,6 +4,7 @@ const STORE_KEY = "momentum-v1";
 const PALETTE = ["#4f9cf9", "#3ecf8e", "#f5b83d", "#f26d6d", "#b98cf2", "#39c5cf", "#f28cc3", "#9aa5b1"];
 const HISTORY_IGNORED_FIELDS = new Set(["color"]);
 const goalEditing = new Set();
+const habitEditing = new Set();
 let expandedFunnelId = null;
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -94,6 +95,7 @@ function normalizeHabit(h) {
     logs: {},
     linkedFunnelId: null,
     autoCreated: false,
+    created: todayKey(),
     editLog: [],
   }, h);
 }
@@ -153,6 +155,13 @@ function isDone(h, key) {
   return false;
 }
 
+// true if the habit was touched at all that day (checked, or any value logged) —
+// used for aggregate/engagement views where "hit the exact target" is too strict
+function habitLoggedOnDay(h, key) {
+  if (h.type === "check") return !!h.checks[key];
+  return h.logs[key] !== undefined;
+}
+
 function streak(h) {
   let s = 0;
   const d = new Date();
@@ -162,6 +171,19 @@ function streak(h) {
     d.setDate(d.getDate() - 1);
   }
   return s;
+}
+
+function longestStreak(h) {
+  const keys = new Set([...Object.keys(h.checks || {}), ...Object.keys(h.logs || {})]);
+  const doneKeys = Array.from(keys).filter((k) => isDone(h, k)).sort();
+  if (!doneKeys.length) return 0;
+  let longest = 1, cur = 1;
+  for (let i = 1; i < doneKeys.length; i++) {
+    const diff = Math.round((new Date(doneKeys[i]) - new Date(doneKeys[i - 1])) / 86400000);
+    cur = diff === 1 ? cur + 1 : 1;
+    longest = Math.max(longest, cur);
+  }
+  return longest;
 }
 
 function fmt(n, dp = 1) {
@@ -566,36 +588,87 @@ function deleteHabit(id) {
   renderAll();
 }
 
-function editHabit(id) {
+function toggleHabitEdit(id) {
+  if (habitEditing.has(id)) habitEditing.delete(id);
+  else habitEditing.add(id);
+  renderHabits();
+}
+
+function toggleHabitEditModeFields(id) {
+  const mode = document.getElementById(`he-mode-${id}`).value;
+  document.getElementById(`he-weekly-${id}`).style.display = mode === "weekly-total" ? "" : "none";
+  document.getElementById(`he-daily-${id}`).style.display = mode === "daily-target" ? "" : "none";
+}
+
+const CADENCE_OPTIONS = [7, 6, 5, 4, 3, 2, 1];
+function cadenceOptionsHtml(selected) {
+  return CADENCE_OPTIONS.map((n) =>
+    `<option value="${n}" ${Number(selected) === n ? "selected" : ""}>${n === 7 ? "Every day" : n + "× / week"}</option>`).join("");
+}
+
+function habitEditFormHtml(h) {
+  const isCheck = h.type === "check";
+  return `<div class="habit-edit-form habit-form-card panel">
+    <div class="form-row">
+      <label class="field grow"><span class="field-label">Name</span>
+        <input type="text" id="he-name-${h.id}" value="${esc(h.name)}">
+      </label>
+      ${isCheck ? `<label class="field narrow"><span class="field-label">Target</span>
+        <select id="he-target-${h.id}">${cadenceOptionsHtml(h.targetPerWeek)}</select>
+      </label>` : `<label class="field narrow"><span class="field-label">Unit</span>
+        <input type="text" id="he-unit-${h.id}" value="${esc(h.unit)}">
+      </label>
+      <label class="field narrow"><span class="field-label">Track as</span>
+        <select id="he-mode-${h.id}" onchange="toggleHabitEditModeFields('${h.id}')">
+          <option value="weekly-total" ${h.mode === "weekly-total" ? "selected" : ""}>Weekly total</option>
+          <option value="daily-target" ${h.mode === "daily-target" ? "selected" : ""}>Daily target</option>
+        </select>
+      </label>
+      <span id="he-weekly-${h.id}" class="field narrow" style="display:${h.mode === "weekly-total" ? "" : "none"}">
+        <span class="field-label">Weekly target</span>
+        <input type="number" id="he-weeklytarget-${h.id}" value="${h.weeklyTarget || 0}" step="any" min="0">
+      </span>
+      <span id="he-daily-${h.id}" class="form-row-nested" style="display:${h.mode === "daily-target" ? "" : "none"}">
+        <label class="field narrow"><span class="field-label">Daily target</span>
+          <input type="number" id="he-dailytarget-${h.id}" value="${h.dailyTarget || 0}" step="any" min="0">
+        </label>
+        <label class="field narrow"><span class="field-label">Days/week</span>
+          <select id="he-cadence-${h.id}">${cadenceOptionsHtml(h.targetPerWeek)}</select>
+        </label>
+      </span>`}
+    </div>
+    <div class="habit-edit-actions">
+      <button class="btn" onclick="saveHabitEdit('${h.id}')">Save</button>
+      <button class="btn-link" onclick="toggleHabitEdit('${h.id}')">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function saveHabitEdit(id) {
   const h = state.habits.find((x) => x.id === id);
   if (!h) return;
-  if (h.autoCreated && h.linkedFunnelId) {
-    alert("This habit is managed by its funnel — edit the funnel instead, or unlink it first.");
-    return;
-  }
-  const before = { name: h.name, targetPerWeek: h.targetPerWeek, unit: h.unit, weeklyTarget: h.weeklyTarget, dailyTarget: h.dailyTarget };
-  const newName = prompt("Habit name:", h.name);
-  if (newName === null) return;
-  if (newName.trim()) h.name = newName.trim();
+  const before = { name: h.name, targetPerWeek: h.targetPerWeek, unit: h.unit, mode: h.mode, weeklyTarget: h.weeklyTarget, dailyTarget: h.dailyTarget };
+
+  const name = document.getElementById(`he-name-${id}`).value.trim();
+  if (name) h.name = name;
 
   if (h.type === "check") {
-    const tw = prompt("Times per week target (1-7):", h.targetPerWeek);
-    if (tw !== null && Number(tw) >= 1 && Number(tw) <= 7) h.targetPerWeek = Number(tw);
-  } else if (!h.linkedFunnelId) {
-    const unit = prompt("Unit (e.g. pages, min):", h.unit);
-    if (unit !== null && unit.trim()) h.unit = unit.trim();
+    h.targetPerWeek = Number(document.getElementById(`he-target-${id}`).value);
+  } else {
+    const unit = document.getElementById(`he-unit-${id}`).value.trim();
+    if (unit) h.unit = unit;
+    h.mode = document.getElementById(`he-mode-${id}`).value;
     if (h.mode === "weekly-total") {
-      const wt = prompt("Weekly target:", h.weeklyTarget);
-      if (wt !== null && isFinite(Number(wt))) h.weeklyTarget = Number(wt);
+      h.weeklyTarget = Number(document.getElementById(`he-weeklytarget-${id}`).value) || 0;
     } else {
-      const dt = prompt("Daily target:", h.dailyTarget);
-      if (dt !== null && isFinite(Number(dt))) h.dailyTarget = Number(dt);
-      const tw = prompt("Days per week target (1-7):", h.targetPerWeek);
-      if (tw !== null && Number(tw) >= 1 && Number(tw) <= 7) h.targetPerWeek = Number(tw);
+      h.dailyTarget = Number(document.getElementById(`he-dailytarget-${id}`).value) || 0;
+      h.targetPerWeek = Number(document.getElementById(`he-cadence-${id}`).value);
     }
   }
-  const after = { name: h.name, targetPerWeek: h.targetPerWeek, unit: h.unit, weeklyTarget: h.weeklyTarget, dailyTarget: h.dailyTarget };
+
+  const after = { name: h.name, targetPerWeek: h.targetPerWeek, unit: h.unit, mode: h.mode, weeklyTarget: h.weeklyTarget, dailyTarget: h.dailyTarget };
   diffAndLog(h, before, after, "");
+  habitEditing.delete(id);
   save();
   renderAll();
 }
@@ -677,11 +750,16 @@ function renderHabits() {
     html += `<td><button class="delete-btn" onclick="deleteHabit('${hRaw.id}')" title="Delete">✕</button></td></tr>`;
 
     const funnel = hRaw.linkedFunnelId ? state.funnels.find((x) => x.id === hRaw.linkedFunnelId) : null;
-    html += `<tr class="habit-extra"><td colspan="11"><div class="habit-extra-inner">
-      ${funnel ? `<span class="linked-tag">${hRaw.autoCreated ? "⚡ auto from" : "🔗 linked to"} ${esc(funnel.title)}</span> <button class="btn-link" onclick="unlinkHabit('${hRaw.id}')">Unlink</button>` : ""}
-      ${funnel && hRaw.autoCreated ? "" : `<button class="btn-link" onclick="editHabit('${hRaw.id}')">✎ Edit</button>`}
-      ${renderHistory("habit", hRaw)}
-    </div></td></tr>`;
+    const editable = !(funnel && hRaw.autoCreated);
+    if (editable && habitEditing.has(hRaw.id)) {
+      html += `<tr class="habit-extra"><td colspan="11">${habitEditFormHtml(hRaw)}</td></tr>`;
+    } else {
+      html += `<tr class="habit-extra"><td colspan="11"><div class="habit-extra-inner">
+        ${funnel ? `<span class="linked-tag">${hRaw.autoCreated ? "⚡ auto from" : "🔗 linked to"} ${esc(funnel.title)}</span> <button class="btn-link" onclick="unlinkHabit('${hRaw.id}')">Unlink</button>` : ""}
+        ${editable ? `<button class="btn-link" onclick="toggleHabitEdit('${hRaw.id}')">✎ Edit</button>` : ""}
+        ${renderHistory("habit", hRaw)}
+      </div></td></tr>`;
+    }
   });
   html += `</tbody></table>`;
   grid.innerHTML = html;
@@ -934,6 +1012,7 @@ document.querySelectorAll("#template-menu button").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.getElementById("template-menu").hidden = true;
     if (btn.dataset.template === "bulk") openProfileModal();
+    else if (btn.dataset.template === "reading") openReadingModal();
     else createFunnelFromTemplate(btn.dataset.template);
   });
 });
@@ -1031,6 +1110,40 @@ document.getElementById("profile-submit-btn").addEventListener("click", () => {
   }));
   save();
   closeProfileModal();
+  finalizeNewFunnel(f);
+});
+
+/* ---------- reading modal (count → sub-unit funnel tailoring) ---------- */
+
+function openReadingModal() {
+  document.getElementById("reading-modal").hidden = false;
+  document.getElementById("reading-scrim").hidden = false;
+}
+
+function closeReadingModal() {
+  document.getElementById("reading-modal").hidden = true;
+  document.getElementById("reading-scrim").hidden = true;
+}
+
+document.getElementById("reading-cancel-btn").addEventListener("click", closeReadingModal);
+document.getElementById("reading-scrim").addEventListener("click", closeReadingModal);
+
+document.getElementById("reading-submit-btn").addEventListener("click", () => {
+  const books = Number(document.getElementById("reading-books").value);
+  const pagesPerBook = Number(document.getElementById("reading-pages").value);
+  const days = Number(document.getElementById("reading-days").value);
+  if (!books || !pagesPerBook || !days) { alert("Fill in all fields."); return; }
+
+  const f = normalizeFunnel(Object.assign({ id: uid(), autoGoal: true, autoHabit: true }, {
+    title: `Read ${fmt(books, 0)} books`,
+    unit: "books",
+    actionUnit: "pages",
+    goalValue: books,
+    days,
+    cadence: "day",
+    stages: [{ id: uid(), label: "Pages", kind: "multiply", value: pagesPerBook }],
+  }));
+  closeReadingModal();
   finalizeNewFunnel(f);
 });
 
@@ -1183,20 +1296,30 @@ function moveStage(funnelId, stageId, dir) {
   renderAll();
 }
 
+function stageHint(stage) {
+  const v = fmt(stage.value, 2);
+  if (stage.kind === "percent") return `takes ${stage.value}% of the row above — use for conversion/response rates`;
+  if (stage.kind === "ratio") return `divides the row above by ${v} — use when you need N of this per 1 of the row above (e.g. clients per big deal)`;
+  return `multiplies the row above by ${v} — use for a fixed per-unit amount (e.g. pages per book, kcal per kg)`;
+}
+
 function stageRowHtml(f, stage, idx, total) {
-  return `<div class="stage-row">
-    <input type="text" class="stage-label" value="${esc(stage.label)}" placeholder="Stage name"
-      onfocus="trackFocus(event)" oninput="updateStageField('${f.id}','${stage.id}','label',this.value)" onblur="stageFieldBlur('${f.id}','${stage.id}','label',event)">
-    <select class="stage-kind" onchange="updateStageField('${f.id}','${stage.id}','kind',this.value)">
-      <option value="percent" ${stage.kind === "percent" ? "selected" : ""}>% rate</option>
-      <option value="ratio" ${stage.kind === "ratio" ? "selected" : ""}>÷ per unit</option>
-      <option value="multiply" ${stage.kind === "multiply" ? "selected" : ""}>× per unit</option>
-    </select>
-    <input type="number" class="stage-value" value="${stage.value}" step="any"
-      onfocus="trackFocus(event)" oninput="updateStageField('${f.id}','${stage.id}','value',this.value)" onblur="stageFieldBlur('${f.id}','${stage.id}','value',event)">
-    <button class="icon-btn" ${idx === 0 ? "disabled" : ""} onclick="moveStage('${f.id}','${stage.id}',-1)" title="Move up">↑</button>
-    <button class="icon-btn" ${idx === total - 1 ? "disabled" : ""} onclick="moveStage('${f.id}','${stage.id}',1)" title="Move down">↓</button>
-    <button class="delete-btn" onclick="deleteStage('${f.id}','${stage.id}')" title="Remove stage">✕</button>
+  return `<div class="stage-block">
+    <div class="stage-row">
+      <input type="text" class="stage-label" value="${esc(stage.label)}" placeholder="Stage name"
+        onfocus="trackFocus(event)" oninput="updateStageField('${f.id}','${stage.id}','label',this.value)" onblur="stageFieldBlur('${f.id}','${stage.id}','label',event)">
+      <select class="stage-kind" onchange="updateStageField('${f.id}','${stage.id}','kind',this.value)">
+        <option value="percent" ${stage.kind === "percent" ? "selected" : ""}>% rate</option>
+        <option value="ratio" ${stage.kind === "ratio" ? "selected" : ""}>÷ per unit</option>
+        <option value="multiply" ${stage.kind === "multiply" ? "selected" : ""}>× per unit</option>
+      </select>
+      <input type="number" class="stage-value" value="${stage.value}" step="any"
+        onfocus="trackFocus(event)" oninput="updateStageField('${f.id}','${stage.id}','value',this.value)" onblur="stageFieldBlur('${f.id}','${stage.id}','value',event)">
+      <button class="icon-btn" ${idx === 0 ? "disabled" : ""} onclick="moveStage('${f.id}','${stage.id}',-1)" title="Move up">↑</button>
+      <button class="icon-btn" ${idx === total - 1 ? "disabled" : ""} onclick="moveStage('${f.id}','${stage.id}',1)" title="Move down">↓</button>
+      <button class="delete-btn" onclick="deleteStage('${f.id}','${stage.id}')" title="Remove stage">✕</button>
+    </div>
+    <div class="stage-hint">${esc(stageHint(stage))}</div>
   </div>`;
 }
 
@@ -1420,9 +1543,12 @@ function populateCalendarHabitSelect() {
     calendarHabitId = null;
     return;
   }
-  if (!calendarHabitId || !state.habits.some((h) => h.id === calendarHabitId)) calendarHabitId = state.habits[0].id;
-  sel.innerHTML = state.habits.map((h) =>
-    `<option value="${h.id}" ${h.id === calendarHabitId ? "selected" : ""}>${esc(resolveHabit(h).name)}</option>`).join("");
+  const valid = calendarHabitId === "__all__" || state.habits.some((h) => h.id === calendarHabitId);
+  if (!calendarHabitId || !valid) calendarHabitId = "__all__";
+  const options = [`<option value="__all__" ${calendarHabitId === "__all__" ? "selected" : ""}>📊 All habits</option>`]
+    .concat(state.habits.map((h) =>
+      `<option value="${h.id}" ${h.id === calendarHabitId ? "selected" : ""}>${esc(resolveHabit(h).name)}</option>`));
+  sel.innerHTML = options.join("");
 }
 
 document.getElementById("calendar-habit-select").addEventListener("change", (e) => {
@@ -1446,23 +1572,7 @@ document.getElementById("cal-today-btn").addEventListener("click", () => {
   renderCalendar();
 });
 
-function renderCalendar() {
-  populateCalendarHabitSelect();
-  const grid = document.getElementById("calendar-grid");
-  const summaryEl = document.getElementById("calendar-summary");
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  document.getElementById("calendar-month-label").textContent = `${monthNames[calendarViewMonth]} ${calendarViewYear}`;
-
-  if (!calendarHabitId) {
-    grid.innerHTML = `<p class="empty-note">No habits yet — add one in the Habits tab.</p>`;
-    summaryEl.innerHTML = "";
-    return;
-  }
-  const hRaw = state.habits.find((h) => h.id === calendarHabitId);
-  if (!hRaw) { grid.innerHTML = ""; summaryEl.innerHTML = ""; return; }
-  const h = resolveHabit(hRaw);
-  const isScale = h.type === "scale";
-
+function calendarSkeleton(cellFn) {
   const firstOfMonth = new Date(calendarViewYear, calendarViewMonth, 1);
   const startDow = (firstOfMonth.getDay() + 6) % 7; // Mon=0
   const daysInMonth = new Date(calendarViewYear, calendarViewMonth + 1, 0).getDate();
@@ -1472,12 +1582,20 @@ function renderCalendar() {
   let html = `<div class="cal-grid">`;
   dayNames.forEach((d) => { html += `<div class="cal-dow">${d}</div>`; });
   for (let i = 0; i < startDow; i++) html += `<div class="cal-cell empty"></div>`;
-
-  let doneCount = 0, pastCount = 0, loggedCount = 0, sum = 0;
   for (let day = 1; day <= daysInMonth; day++) {
     const key = dateKey(new Date(calendarViewYear, calendarViewMonth, day));
-    const isToday = key === tk;
-    const isFuture = key > tk;
+    html += cellFn(day, key, key === tk, key > tk);
+  }
+  html += `</div>`;
+  return html;
+}
+
+function renderSingleHabitCalendar(hRaw) {
+  const h = resolveHabit(hRaw);
+  const isScale = h.type === "scale";
+  let doneCount = 0, pastCount = 0, loggedCount = 0, sum = 0;
+
+  const gridHtml = calendarSkeleton((day, key, isToday, isFuture) => {
     let cellClass = "cal-cell";
     let content = `<div class="cal-daynum">${day}</div>`;
     if (isToday) cellClass += " cal-today";
@@ -1502,19 +1620,162 @@ function renderCalendar() {
       else if (!isFuture) { cellClass += " cal-missed"; }
     }
     if (isFuture) cellClass += " cal-future";
-    html += `<div class="${cellClass}">${content}</div>`;
-  }
-  html += `</div>`;
-  grid.innerHTML = html;
+    return `<div class="${cellClass}">${content}</div>`;
+  });
 
-  if (isScale) {
-    summaryEl.innerHTML = `
-      <span><strong>${loggedCount}</strong> / ${pastCount} days logged</span>
-      <span><strong>${fmt(sum, 1)}</strong> ${esc(h.unit)} total this month</span>
-      <span><strong>${fmt(loggedCount ? sum / loggedCount : 0, 1)}</strong> ${esc(h.unit)} avg on logged days</span>`;
-  } else {
-    summaryEl.innerHTML = `<span><strong>${doneCount}</strong> / ${pastCount} done this month</span>`;
+  const summaryHtml = isScale
+    ? `<span><strong>${loggedCount}</strong> / ${pastCount} days logged</span>
+       <span><strong>${fmt(sum, 1)}</strong> ${esc(h.unit)} total this month</span>
+       <span><strong>${fmt(loggedCount ? sum / loggedCount : 0, 1)}</strong> ${esc(h.unit)} avg on logged days</span>`
+    : `<span><strong>${doneCount}</strong> / ${pastCount} done this month</span>`;
+
+  return { gridHtml, summaryHtml };
+}
+
+function renderAllHabitsCalendar() {
+  const habits = state.habits;
+  let pastCount = 0;
+  let pctSum = 0;
+  let bestDay = null;
+
+  const gridHtml = calendarSkeleton((day, key, isToday, isFuture) => {
+    let cellClass = "cal-cell all-cell";
+    let content = `<div class="cal-daynum">${day}</div>`;
+    if (isToday) cellClass += " cal-today";
+
+    if (!isFuture) {
+      const applicable = habits.filter((h) => !h.created || h.created <= key);
+      const doneCount = applicable.filter((h) => habitLoggedOnDay(h, key)).length;
+      const total = applicable.length;
+      const pct = total > 0 ? doneCount / total : 0;
+      pastCount++;
+      pctSum += pct;
+      if (total > 0 && (!bestDay || pct > bestDay.pct)) bestDay = { key, pct, doneCount, total };
+      content += `<div class="cal-value">${total ? `${doneCount}/${total}` : "–"}</div>`;
+      cellClass += ` all-alpha-${Math.round(pct * 4)}`;
+    } else {
+      cellClass += " cal-future";
+    }
+    return `<div class="${cellClass}">${content}</div>`;
+  });
+
+  const avgPct = pastCount ? Math.round((pctSum / pastCount) * 100) : 0;
+  const bestDayLabel = bestDay
+    ? new Date(bestDay.key).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + ` (${bestDay.doneCount}/${bestDay.total})`
+    : "–";
+  const summaryHtml = `
+    <span><strong>${avgPct}%</strong> avg habits completed/day</span>
+    <span><strong>${habits.length}</strong> habits tracked</span>
+    <span><strong>${bestDayLabel}</strong> best day this month</span>`;
+
+  return { gridHtml, summaryHtml };
+}
+
+function renderCalendar() {
+  populateCalendarHabitSelect();
+  const grid = document.getElementById("calendar-grid");
+  const summaryEl = document.getElementById("calendar-summary");
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  document.getElementById("calendar-month-label").textContent = `${monthNames[calendarViewMonth]} ${calendarViewYear}`;
+
+  if (!calendarHabitId) {
+    grid.innerHTML = `<p class="empty-note">No habits yet — add one in the Habits tab.</p>`;
+    summaryEl.innerHTML = "";
+    return;
   }
+
+  let result;
+  if (calendarHabitId === "__all__") {
+    result = renderAllHabitsCalendar();
+  } else {
+    const hRaw = state.habits.find((h) => h.id === calendarHabitId);
+    if (!hRaw) { grid.innerHTML = ""; summaryEl.innerHTML = ""; return; }
+    result = renderSingleHabitCalendar(hRaw);
+  }
+  grid.innerHTML = result.gridHtml;
+  summaryEl.innerHTML = result.summaryHtml;
+}
+
+/* ---------- stats ---------- */
+
+function habitStatsWindow(h, windowDays) {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - (windowDays - 1));
+  let startKey = dateKey(start);
+  if (h.created && h.created > startKey) startKey = h.created;
+  const tk = todayKey();
+  let totalDays = 0, doneDays = 0, loggedDays = 0, sum = 0;
+  for (let d = new Date(startKey); dateKey(d) <= tk; d.setDate(d.getDate() + 1)) {
+    const key = dateKey(d);
+    totalDays++;
+    if (h.type === "check") {
+      if (h.checks[key]) doneDays++;
+    } else if (h.logs[key] !== undefined) {
+      loggedDays++;
+      sum += Number(h.logs[key]) || 0;
+      if (isDone(h, key)) doneDays++;
+    }
+  }
+  return { totalDays, doneDays, loggedDays, sum };
+}
+
+function habitStatPct(h, w) {
+  const isWeeklyTotal = h.type === "scale" && h.mode === "weekly-total";
+  if (!w.totalDays) return 0;
+  return Math.round(((isWeeklyTotal ? w.loggedDays : w.doneDays) / w.totalDays) * 100);
+}
+
+function habitStatCardHtml(hRaw) {
+  const h = resolveHabit(hRaw);
+  const w = habitStatsWindow(hRaw, 30);
+  const isCheck = h.type === "check";
+  const isWeeklyTotal = h.type === "scale" && h.mode === "weekly-total";
+  const pct = habitStatPct(hRaw, w);
+  const avgVal = w.loggedDays ? w.sum / w.loggedDays : 0;
+
+  let metaLine;
+  if (isCheck) metaLine = `${w.doneDays}/${w.totalDays} days done`;
+  else if (isWeeklyTotal) metaLine = `${w.loggedDays}/${w.totalDays} days logged · avg ${fmt(avgVal, 1)} ${esc(h.unit)}`;
+  else metaLine = `${w.doneDays}/${w.totalDays} days hit target · avg ${fmt(avgVal, 1)} ${esc(h.unit)}`;
+
+  const streaksHtml = isWeeklyTotal ? "" : `<div class="stat-streaks">
+    <span><strong>${streak(hRaw)}</strong> current streak</span>
+    <span><strong>${longestStreak(hRaw)}</strong> best streak</span>
+  </div>`;
+
+  return `<div class="stat-card">
+    <div class="stat-head"><strong>${esc(h.name)}</strong><span class="muted">${esc(h.unit || "check-off")}</span></div>
+    <div class="stat-bar-row"><div class="stat-bar"><div style="width:${pct}%"></div></div><span class="stat-pct">${pct}%</span></div>
+    <div class="stat-meta">${metaLine} <span class="muted">(last 30 days)</span></div>
+    ${streaksHtml}
+  </div>`;
+}
+
+function renderStats() {
+  const overview = document.getElementById("stats-overview");
+  const content = document.getElementById("stats-content");
+  if (!state.habits.length) {
+    overview.innerHTML = "";
+    content.innerHTML = `<p class="empty-note">No habits yet — add some in the Habits tab to see stats here.</p>`;
+    return;
+  }
+
+  const perHabit = state.habits.map((h) => {
+    const w = habitStatsWindow(h, 30);
+    return { h, w, pct: habitStatPct(h, w) };
+  });
+  const avgPct = Math.round(perHabit.reduce((s, x) => s + x.pct, 0) / perHabit.length);
+  const bestStreak = Math.max(0, ...state.habits.map((h) => streak(h)));
+  const totalEntries = state.habits.reduce((s, h) => s + Object.keys(h.checks || {}).length + Object.keys(h.logs || {}).length, 0);
+
+  overview.innerHTML = `
+    <div class="stat-tile"><div class="num">${avgPct}%</div><div class="label">avg consistency</div></div>
+    <div class="stat-tile"><div class="num">${state.habits.length}</div><div class="label">habits tracked</div></div>
+    <div class="stat-tile"><div class="num">🔥 ${bestStreak}</div><div class="label">best current streak</div></div>
+    <div class="stat-tile"><div class="num">${totalEntries}</div><div class="label">total entries logged</div></div>`;
+
+  content.innerHTML = state.habits.map(habitStatCardHtml).join("");
 }
 
 /* ---------- misc ---------- */
@@ -1525,6 +1786,7 @@ function renderAll() {
   renderFunnels();
   renderDashboard();
   renderCalendar();
+  renderStats();
 }
 
 renderAll();

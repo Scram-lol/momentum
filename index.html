@@ -18,6 +18,7 @@
     <button data-tab="goals">Goals</button>
     <button data-tab="funnel">Funnels</button>
     <button data-tab="calendar">Calendar</button>
+    <button data-tab="stats">Stats</button>
   </nav>
   <div class="data-actions">
     <button id="export-btn" title="Download all data as JSON">Export</button>
@@ -112,6 +113,23 @@
     <div class="modal-actions">
       <button class="btn" id="profile-submit-btn">Build funnel</button>
       <button class="btn-link" id="profile-cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="reading-scrim" class="settings-scrim" hidden></div>
+<div id="reading-modal" class="modal" hidden>
+  <div class="modal-inner">
+    <h3>Books → daily pages</h3>
+    <p class="muted">Books vary in length, so this is necessarily a rough conversion — pick an average page count and Momentum works out the daily reading target. Change it any time from the funnel.</p>
+    <div class="modal-grid">
+      <label>How many books?<input type="number" id="reading-books" step="1" min="1" value="12"></label>
+      <label>Avg pages per book<input type="number" id="reading-pages" step="1" min="1" value="300"></label>
+      <label class="span-2">Timeframe (days)<input type="number" id="reading-days" step="1" min="1" value="90"></label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="reading-submit-btn">Build funnel</button>
+      <button class="btn-link" id="reading-cancel-btn">Cancel</button>
     </div>
   </div>
 </div>
@@ -239,6 +257,7 @@
           <button data-template="revenue">💷 Revenue → daily outreach</button>
           <button data-template="audience">📈 Subscribers → daily views</button>
           <button data-template="bulk">🏋️ Body-weight bulk → daily calories</button>
+          <button data-template="reading">📚 Books read → daily pages</button>
         </div>
       </div>
     </div>
@@ -260,6 +279,14 @@
     </div>
     <div id="calendar-grid"></div>
     <div id="calendar-summary" class="calendar-summary"></div>
+  </section>
+
+  <!-- STATS -->
+  <section id="tab-stats" class="tab">
+    <h2>Stats</h2>
+    <p class="muted">How consistent you've actually been, last 30 days.</p>
+    <div id="stats-overview" class="stats-overview"></div>
+    <div id="stats-content" class="stats-grid"></div>
   </section>
 </main>
 

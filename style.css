@@ -170,6 +170,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 .habit-form-card .field.narrow { flex: 0 0 140px; min-width: 120px; }
 .habit-form-card .field-label { font-size: 12px; color: var(--muted); font-weight: 600; }
 .habit-form-card button[type="submit"] { align-self: flex-start; }
+.habit-edit-form { margin: 6px 0 14px; }
+.habit-edit-actions { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
 .goal-form input[type="number"] { width: 110px; }
 .goal-form input[type="date"] { width: 160px; }
 
@@ -374,13 +376,15 @@ button[type="submit"]:hover, .btn:hover { filter: brightness(1.1); }
   gap: 10px;
   margin-bottom: 18px;
 }
-.stage-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.stage-rows { display: flex; flex-direction: column; gap: 14px; margin-bottom: 10px; }
+.stage-block { display: flex; flex-direction: column; gap: 4px; }
 .stage-row {
   display: grid;
   grid-template-columns: 2fr 110px 110px auto auto auto;
   gap: 8px;
   align-items: center;
 }
+.stage-hint { font-size: 12px; color: var(--muted); padding-left: 2px; }
 .funnel-actions { display: flex; gap: 10px; margin: 18px 0 12px; }
 
 .dash-funnel-row {
@@ -596,8 +600,52 @@ button[type="submit"]:hover, .btn:hover { filter: brightness(1.1); }
 .cal-bar { height: 4px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
 .cal-bar div { height: 100%; background: var(--accent); }
 .cal-empty-val { opacity: 0.5; }
+.all-cell .cal-value { font-size: 13px; font-weight: 600; }
+.all-alpha-0 { background: var(--panel); }
+.all-alpha-1 { background: color-mix(in srgb, var(--accent) 20%, var(--panel)); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.all-alpha-2 { background: color-mix(in srgb, var(--accent) 40%, var(--panel)); border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.all-alpha-3 { background: color-mix(in srgb, var(--accent) 60%, var(--panel)); border-color: color-mix(in srgb, var(--accent) 75%, var(--border)); }
+.all-alpha-4 { background: color-mix(in srgb, var(--accent) 80%, var(--panel)); border-color: var(--accent); }
+.all-alpha-3 .cal-value, .all-alpha-4 .cal-value { color: #fff; }
+.all-alpha-3 .cal-daynum, .all-alpha-4 .cal-daynum { color: rgba(255,255,255,0.75); }
 .calendar-summary { display: flex; gap: 24px; margin-top: 16px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
 .calendar-summary strong { color: var(--text); font-size: 15px; display: block; }
+
+/* ---- stats ---- */
+.stats-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.stats-overview .stat-tile {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.stats-overview .stat-tile .num { font-size: 28px; font-weight: 700; color: var(--accent); line-height: 1.2; }
+.stats-overview .stat-tile .label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+.stat-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+.stat-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.stat-head strong { font-size: 15px; }
+.stat-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.stat-bar { flex: 1; height: 8px; background: var(--panel-2); border-radius: 5px; overflow: hidden; }
+.stat-bar div { height: 100%; background: var(--accent); }
+.stat-pct { font-size: 13px; font-weight: 700; color: var(--text); width: 40px; text-align: right; }
+.stat-meta { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.stat-streaks { display: flex; gap: 18px; font-size: 12px; color: var(--muted); }
+.stat-streaks strong { color: var(--text); font-size: 14px; display: block; }
 
 /* ---- modal (profile setup) ---- */
 .modal {
