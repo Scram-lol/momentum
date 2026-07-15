@@ -41,7 +41,7 @@ function weekDates() {
 /* ---------- state ---------- */
 
 function defaults() {
-  return { habits: [], goals: [], funnels: [], profile: defaultProfile() };
+  return { habits: [], goals: [], funnels: [], profile: defaultProfile(), vacations: [] };
 }
 
 function defaultProfile() {
@@ -101,14 +101,20 @@ function migrateFunnel(old) {
 function normalizeHabit(h) {
   return Object.assign({
     type: "check",
+    intent: "build",
     targetPerWeek: 7,
     checks: {},
     logs: {},
+    skips: {},
     linkedFunnelId: null,
     autoCreated: false,
     created: todayKey(),
     editLog: [],
   }, h);
+}
+
+function normalizeVacation(v) {
+  return Object.assign({ id: uid(), label: "", start: todayKey(), end: todayKey(), habitIds: [] }, v);
 }
 
 function normalizeGoal(g) {
@@ -146,6 +152,7 @@ function hydrate(raw) {
   s.goals = (s.goals || []).map(normalizeGoal);
   s.funnels = (s.funnels || []).map(normalizeFunnel);
   s.profile = normalizeProfile(s.profile);
+  s.vacations = (s.vacations || []).map(normalizeVacation);
   return s;
 }
 
@@ -173,13 +180,37 @@ function habitLoggedOnDay(h, key) {
   return h.logs[key] !== undefined;
 }
 
+function inVacation(h, key) {
+  return state.vacations.some((v) => v.habitIds.includes(h.id) && key >= v.start && key <= v.end);
+}
+
+// an "excused" day — doesn't count as a miss (streaks pass over it, stats exclude it) —
+// but only when nothing was actually logged; a real check/log always wins
+function isSkipped(h, key) {
+  if (habitLoggedOnDay(h, key)) return false;
+  if (h.skips && h.skips[key]) return true;
+  return inVacation(h, key);
+}
+
+function daysBetweenExclusive(fromKey, toKey) {
+  const out = [];
+  let d = addDays(fromKey, 1);
+  while (d < toKey) {
+    out.push(d);
+    d = addDays(d, 1);
+  }
+  return out;
+}
+
 function streak(h) {
   let s = 0;
   const d = new Date();
-  if (!isDone(h, dateKey(d))) d.setDate(d.getDate() - 1);
-  while (isDone(h, dateKey(d))) {
-    s++;
-    d.setDate(d.getDate() - 1);
+  if (!isDone(h, dateKey(d)) && !isSkipped(h, dateKey(d))) d.setDate(d.getDate() - 1);
+  while (true) {
+    const key = dateKey(d);
+    if (isDone(h, key)) { s++; d.setDate(d.getDate() - 1); continue; }
+    if (isSkipped(h, key)) { d.setDate(d.getDate() - 1); continue; }
+    break;
   }
   return s;
 }
@@ -191,7 +222,8 @@ function longestStreak(h) {
   let longest = 1, cur = 1;
   for (let i = 1; i < doneKeys.length; i++) {
     const diff = Math.round((new Date(doneKeys[i]) - new Date(doneKeys[i - 1])) / 86400000);
-    cur = diff === 1 ? cur + 1 : 1;
+    const gapAllSkipped = diff > 1 && daysBetweenExclusive(doneKeys[i - 1], doneKeys[i]).every((k) => isSkipped(h, k));
+    cur = (diff === 1 || gapAllSkipped) ? cur + 1 : 1;
     longest = Math.max(longest, cur);
   }
   return longest;
@@ -533,12 +565,20 @@ document.getElementById("habit-type").addEventListener("change", updateHabitForm
 document.getElementById("habit-mode").addEventListener("change", updateScaleModeVisibility);
 updateHabitFormVisibility();
 
+let habitFormIntent = "build";
+document.getElementById("habit-intent").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  habitFormIntent = btn.dataset.value;
+  document.querySelectorAll("#habit-intent button").forEach((b) => b.classList.toggle("active", b === btn));
+});
+
 document.getElementById("habit-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const name = document.getElementById("habit-name").value.trim();
   if (!name) return;
   const type = document.getElementById("habit-type").value;
-  const habit = normalizeHabit({ id: uid(), name, type });
+  const habit = normalizeHabit({ id: uid(), name, type, intent: habitFormIntent });
   if (type === "check") {
     habit.targetPerWeek = Number(document.getElementById("habit-cadence-check").value);
   } else {
@@ -554,6 +594,8 @@ document.getElementById("habit-form").addEventListener("submit", (e) => {
   state.habits.push(habit);
   e.target.reset();
   updateHabitFormVisibility();
+  habitFormIntent = "build";
+  document.querySelectorAll("#habit-intent button").forEach((b) => b.classList.toggle("active", b.dataset.value === "build"));
   save();
   renderAll();
 });
@@ -562,7 +604,7 @@ function toggleCheck(habitId, key) {
   const h = state.habits.find((x) => x.id === habitId);
   if (!h) return;
   if (h.checks[key]) delete h.checks[key];
-  else h.checks[key] = true;
+  else { h.checks[key] = true; if (h.skips) delete h.skips[key]; }
   save();
   renderAll();
 }
@@ -572,7 +614,7 @@ function setScaleLog(habitId, key, rawValue) {
   if (!h) return;
   const v = rawValue === "" ? undefined : Number(rawValue);
   if (v === undefined || !isFinite(v)) delete h.logs[key];
-  else h.logs[key] = v;
+  else { h.logs[key] = v; if (h.skips) delete h.skips[key]; }
   save();
   renderAll();
 }
@@ -582,6 +624,22 @@ function stepScaleLog(habitId, key, delta) {
   if (!h) return;
   const next = Math.max(0, (Number(h.logs[key]) || 0) + delta);
   h.logs[key] = next;
+  if (h.skips) delete h.skips[key];
+  save();
+  renderAll();
+}
+
+function toggleSkip(habitId, key) {
+  const h = state.habits.find((x) => x.id === habitId);
+  if (!h) return;
+  h.skips = h.skips || {};
+  if (h.skips[key]) {
+    delete h.skips[key];
+  } else {
+    h.skips[key] = true;
+    delete h.checks[key];
+    delete h.logs[key];
+  }
   save();
   renderAll();
 }
@@ -617,6 +675,10 @@ function cadenceOptionsHtml(selected) {
     `<option value="${n}" ${Number(selected) === n ? "selected" : ""}>${n === 7 ? "Every day" : n + "× / week"}</option>`).join("");
 }
 
+function setHabitEditIntent(id, value, btnEl) {
+  document.getElementById(`he-intent-${id}`).querySelectorAll("button").forEach((b) => b.classList.toggle("active", b === btnEl));
+}
+
 function habitEditFormHtml(h) {
   const isCheck = h.type === "check";
   return `<div class="habit-edit-form habit-form-card panel">
@@ -624,6 +686,13 @@ function habitEditFormHtml(h) {
       <label class="field grow"><span class="field-label">Name</span>
         <input type="text" id="he-name-${h.id}" value="${esc(h.name)}">
       </label>
+      <div class="field narrow">
+        <span class="field-label">Intent</span>
+        <div class="segmented" id="he-intent-${h.id}">
+          <button type="button" data-value="build" class="${h.intent !== "quit" ? "active" : ""}" onclick="setHabitEditIntent('${h.id}','build',this)">🎯 Build</button>
+          <button type="button" data-value="quit" class="${h.intent === "quit" ? "active" : ""}" onclick="setHabitEditIntent('${h.id}','quit',this)">🚫 Quit</button>
+        </div>
+      </div>
       ${isCheck ? `<label class="field narrow"><span class="field-label">Target</span>
         <select id="he-target-${h.id}">${cadenceOptionsHtml(h.targetPerWeek)}</select>
       </label>` : `<label class="field narrow"><span class="field-label">Unit</span>
@@ -658,10 +727,13 @@ function habitEditFormHtml(h) {
 function saveHabitEdit(id) {
   const h = state.habits.find((x) => x.id === id);
   if (!h) return;
-  const before = { name: h.name, targetPerWeek: h.targetPerWeek, unit: h.unit, mode: h.mode, weeklyTarget: h.weeklyTarget, dailyTarget: h.dailyTarget };
+  const before = { name: h.name, targetPerWeek: h.targetPerWeek, unit: h.unit, mode: h.mode, weeklyTarget: h.weeklyTarget, dailyTarget: h.dailyTarget, intent: h.intent };
 
   const name = document.getElementById(`he-name-${id}`).value.trim();
   if (name) h.name = name;
+
+  const intentBtn = document.querySelector(`#he-intent-${id} button.active`);
+  if (intentBtn) h.intent = intentBtn.dataset.value;
 
   if (h.type === "check") {
     h.targetPerWeek = Number(document.getElementById(`he-target-${id}`).value);
@@ -677,7 +749,7 @@ function saveHabitEdit(id) {
     }
   }
 
-  const after = { name: h.name, targetPerWeek: h.targetPerWeek, unit: h.unit, mode: h.mode, weeklyTarget: h.weeklyTarget, dailyTarget: h.dailyTarget };
+  const after = { name: h.name, targetPerWeek: h.targetPerWeek, unit: h.unit, mode: h.mode, weeklyTarget: h.weeklyTarget, dailyTarget: h.dailyTarget, intent: h.intent };
   diffAndLog(h, before, after, "");
   habitEditing.delete(id);
   save();
@@ -734,18 +806,22 @@ function renderHabits() {
     const isScale = h.type === "scale";
     const isWeeklyTotal = isScale && h.mode === "weekly-total";
 
-    html += `<tr><td class="habit-name">${esc(h.name)}<div class="habit-meta">${habitMetaLabel(h)}</div></td>`;
+    const quitTag = h.intent === "quit" ? `<span class="quit-tag">🚫 quitting</span>` : "";
+    html += `<tr><td class="habit-name">${esc(h.name)}<div class="habit-meta">${habitMetaLabel(h)} ${quitTag}</div></td>`;
     days.forEach((d) => {
       const key = dateKey(d);
       const future = key > tk;
+      const skipped = !future && isSkipped(hRaw, key);
       if (isScale) {
         const val = hRaw.logs[key];
-        html += `<td>${future ? '<span class="check-cell future">·</span>' :
-          `<input type="number" class="scale-cell" value="${val !== undefined ? val : ""}" step="any" min="0" placeholder="–" onchange="setScaleLog('${hRaw.id}','${key}',this.value)">`}</td>`;
+        html += `<td class="${skipped ? "skipped-cell" : ""}">${future ? '<span class="check-cell future">·</span>' :
+          `<input type="number" class="scale-cell" value="${val !== undefined ? val : ""}" step="any" min="0" placeholder="${skipped ? "skip" : "–"}" onchange="setScaleLog('${hRaw.id}','${key}',this.value)">`}</td>`;
       } else {
         const done = !!hRaw.checks[key];
-        html += `<td><span class="check-cell ${done ? "done" : ""} ${future ? "future" : ""}"
-          ${future ? "" : `onclick="toggleCheck('${hRaw.id}','${key}')"`}>${done ? "✓" : "·"}</span></td>`;
+        const cls = `check-cell ${done ? "done" : ""} ${done && h.intent === "quit" ? "quit-habit" : ""} ${skipped ? "skipped" : ""} ${future ? "future" : ""}`;
+        const glyph = done ? (h.intent === "quit" ? "🚫" : "✓") : skipped ? "⏭" : "·";
+        html += `<td class="${skipped ? "skipped-cell" : ""}"><span class="${cls}"
+          ${future ? "" : `onclick="toggleCheck('${hRaw.id}','${key}')"`}>${glyph}</span></td>`;
       }
     });
 
@@ -1172,6 +1248,86 @@ document.getElementById("reading-submit-btn").addEventListener("click", () => {
   finalizeNewFunnel(f);
 });
 
+/* ---------- vacation mode ---------- */
+
+function vacationStatus(v, tk) {
+  if (tk < v.start) return "upcoming";
+  if (tk > v.end) return "past";
+  return "active";
+}
+
+function renderVacationList() {
+  const el = document.getElementById("vacation-list");
+  if (!state.vacations.length) { el.innerHTML = ""; return; }
+  const tk = todayKey();
+  el.innerHTML = state.vacations.slice().sort((a, b) => a.start.localeCompare(b.start)).map((v) => {
+    const status = vacationStatus(v, tk);
+    const statusLabel = status === "active" ? "🏖 Active now" : status === "upcoming" ? "Upcoming" : "Past";
+    const names = v.habitIds.map((id) => state.habits.find((h) => h.id === id)?.name).filter(Boolean);
+    return `<div class="vacation-row">
+      <div>
+        <strong>${esc(v.label || "Vacation")}</strong>
+        <div class="muted">${v.start} → ${v.end} · ${esc(names.join(", ") || "no habits")} · <span class="vacation-status vacation-status-${status}">${statusLabel}</span></div>
+      </div>
+      <button class="delete-btn" onclick="deleteVacation('${v.id}')" title="Delete">✕</button>
+    </div>`;
+  }).join("");
+}
+
+function renderVacationHabitChecklist() {
+  const el = document.getElementById("vacation-habit-list");
+  if (!state.habits.length) {
+    el.innerHTML = `<p class="empty-note">No habits yet — add some in the Habits tab first.</p>`;
+    return;
+  }
+  el.innerHTML = state.habits.map((h) => `
+    <label class="vacation-habit-row">
+      <span>${esc(h.name)}</span>
+      <input type="checkbox" class="vacation-habit-check" value="${h.id}" checked>
+    </label>`).join("");
+}
+
+function openVacationModal() {
+  renderVacationList();
+  renderVacationHabitChecklist();
+  document.getElementById("vacation-start").value = todayKey();
+  document.getElementById("vacation-end").value = addDays(todayKey(), 7);
+  document.getElementById("vacation-label").value = "";
+  document.getElementById("vacation-modal").hidden = false;
+  document.getElementById("vacation-scrim").hidden = false;
+}
+
+function closeVacationModal() {
+  document.getElementById("vacation-modal").hidden = true;
+  document.getElementById("vacation-scrim").hidden = true;
+}
+
+document.getElementById("vacation-btn").addEventListener("click", openVacationModal);
+document.getElementById("vacation-cancel-btn").addEventListener("click", closeVacationModal);
+document.getElementById("vacation-scrim").addEventListener("click", closeVacationModal);
+
+document.getElementById("vacation-submit-btn").addEventListener("click", () => {
+  const start = document.getElementById("vacation-start").value;
+  const end = document.getElementById("vacation-end").value;
+  const label = document.getElementById("vacation-label").value.trim();
+  const habitIds = Array.from(document.querySelectorAll(".vacation-habit-check:checked")).map((el) => el.value);
+  if (!start || !end || start > end) { alert("Pick a valid date range (end on or after start)."); return; }
+  if (!habitIds.length) { alert("Select at least one habit to skip."); return; }
+
+  state.vacations.push(normalizeVacation({ id: uid(), label, start, end, habitIds }));
+  save();
+  renderAll();
+  renderVacationList();
+  document.getElementById("vacation-label").value = "";
+});
+
+function deleteVacation(id) {
+  state.vacations = state.vacations.filter((v) => v.id !== id);
+  save();
+  renderAll();
+  renderVacationList();
+}
+
 function expandFunnel(id) {
   expandedFunnelId = id;
   renderFunnels();
@@ -1475,12 +1631,24 @@ function renderDashboard() {
   } else {
     habitBox.innerHTML = state.habits.map((hRaw) => {
       const h = resolveHabit(hRaw);
+      const skippedToday = isSkipped(hRaw, tk);
+      const skipBtn = `<button class="skip-btn" onclick="toggleSkip('${hRaw.id}','${tk}')">${skippedToday ? "↺ Unskip" : "⏭ Skip"}</button>`;
+
+      if (skippedToday) {
+        return `<div class="dash-habit-row dash-skipped">
+          <span class="check-cell skipped">⏭</span>
+          <span class="name muted">${esc(h.name)} — skipped today</span>
+          ${skipBtn}
+        </div>`;
+      }
+
       if (h.type === "check") {
         const done = !!hRaw.checks[tk];
         return `<div class="dash-habit-row">
-          <span class="check-cell ${done ? "done" : ""}" onclick="toggleCheck('${hRaw.id}','${tk}')">${done ? "✓" : "·"}</span>
+          <span class="check-cell ${done ? "done" : ""} ${done && h.intent === "quit" ? "quit-habit" : ""}" onclick="toggleCheck('${hRaw.id}','${tk}')">${done ? (h.intent === "quit" ? "🚫" : "✓") : "·"}</span>
           <span class="name ${done ? "done" : ""}">${esc(h.name)}</span>
           <span class="streak-badge">🔥 ${streak(h)}</span>
+          ${skipBtn}
         </div>`;
       }
       const val = hRaw.logs[tk];
@@ -1493,6 +1661,7 @@ function renderDashboard() {
           <button class="step-btn" onclick="stepScaleLog('${hRaw.id}','${tk}',1)">+</button>
         </div>
         <span class="name">${esc(h.name)} <span class="muted">${esc(h.unit)}${targetNote}</span></span>
+        ${skipBtn}
       </div>`;
     }).join("");
   }
@@ -1618,41 +1787,49 @@ function calendarSkeleton(cellFn) {
 function renderSingleHabitCalendar(hRaw) {
   const h = resolveHabit(hRaw);
   const isScale = h.type === "scale";
-  let doneCount = 0, pastCount = 0, loggedCount = 0, sum = 0;
+  let doneCount = 0, pastCount = 0, loggedCount = 0, sum = 0, skippedCount = 0;
 
   const gridHtml = calendarSkeleton((day, key, isToday, isFuture) => {
     let cellClass = "cal-cell";
     let content = `<div class="cal-daynum">${day}</div>`;
     if (isToday) cellClass += " cal-today";
-    if (!isFuture) pastCount++;
 
-    if (isScale) {
-      const val = hRaw.logs[key];
-      if (val !== undefined) {
-        loggedCount++; sum += val;
-        cellClass += " cal-has-value";
-        content += `<div class="cal-value">${fmt(val, 1)}</div>`;
-        if (h.mode === "daily-target" && h.dailyTarget > 0) {
-          const pct = Math.min(1, val / h.dailyTarget);
-          content += `<div class="cal-bar"><div style="width:${pct * 100}%"></div></div>`;
-        }
-      } else if (!isFuture) {
-        cellClass += " cal-empty-val";
-      }
+    const skipped = !isFuture && isSkipped(hRaw, key);
+    if (skipped) {
+      skippedCount++;
+      cellClass += " cal-skipped";
+      content += `<div class="cal-value">⏭</div>`;
     } else {
-      const done = !!hRaw.checks[key];
-      if (done) { doneCount++; cellClass += " cal-done"; content += `<div class="cal-check">✓</div>`; }
-      else if (!isFuture) { cellClass += " cal-missed"; }
+      if (!isFuture) pastCount++;
+      if (isScale) {
+        const val = hRaw.logs[key];
+        if (val !== undefined) {
+          loggedCount++; sum += val;
+          cellClass += " cal-has-value";
+          content += `<div class="cal-value">${fmt(val, 1)}</div>`;
+          if (h.mode === "daily-target" && h.dailyTarget > 0) {
+            const pct = Math.min(1, val / h.dailyTarget);
+            content += `<div class="cal-bar"><div style="width:${pct * 100}%"></div></div>`;
+          }
+        } else if (!isFuture) {
+          cellClass += " cal-empty-val";
+        }
+      } else {
+        const done = !!hRaw.checks[key];
+        if (done) { doneCount++; cellClass += " cal-done"; content += `<div class="cal-check">✓</div>`; }
+        else if (!isFuture) { cellClass += " cal-missed"; }
+      }
     }
     if (isFuture) cellClass += " cal-future";
     return `<div class="${cellClass}">${content}</div>`;
   });
 
+  const skippedNote = skippedCount ? ` <span><strong>${skippedCount}</strong> skipped</span>` : "";
   const summaryHtml = isScale
     ? `<span><strong>${loggedCount}</strong> / ${pastCount} days logged</span>
        <span><strong>${fmt(sum, 1)}</strong> ${esc(h.unit)} total this month</span>
-       <span><strong>${fmt(loggedCount ? sum / loggedCount : 0, 1)}</strong> ${esc(h.unit)} avg on logged days</span>`
-    : `<span><strong>${doneCount}</strong> / ${pastCount} done this month</span>`;
+       <span><strong>${fmt(loggedCount ? sum / loggedCount : 0, 1)}</strong> ${esc(h.unit)} avg on logged days</span>${skippedNote}`
+    : `<span><strong>${doneCount}</strong> / ${pastCount} done this month</span>${skippedNote}`;
 
   return { gridHtml, summaryHtml };
 }
@@ -1669,7 +1846,7 @@ function renderAllHabitsCalendar() {
     if (isToday) cellClass += " cal-today";
 
     if (!isFuture) {
-      const applicable = habits.filter((h) => !h.created || h.created <= key);
+      const applicable = habits.filter((h) => (!h.created || h.created <= key) && !isSkipped(h, key));
       const doneCount = applicable.filter((h) => habitLoggedOnDay(h, key)).length;
       const total = applicable.length;
       const pct = total > 0 ? doneCount / total : 0;
@@ -1730,9 +1907,10 @@ function habitStatsWindow(h, windowDays) {
   let startKey = dateKey(start);
   if (h.created && h.created > startKey) startKey = h.created;
   const tk = todayKey();
-  let totalDays = 0, doneDays = 0, loggedDays = 0, sum = 0;
+  let totalDays = 0, doneDays = 0, loggedDays = 0, sum = 0, skippedDays = 0;
   for (let d = new Date(startKey); dateKey(d) <= tk; d.setDate(d.getDate() + 1)) {
     const key = dateKey(d);
+    if (isSkipped(h, key)) { skippedDays++; continue; }
     totalDays++;
     if (h.type === "check") {
       if (h.checks[key]) doneDays++;
@@ -1742,12 +1920,12 @@ function habitStatsWindow(h, windowDays) {
       if (isDone(h, key)) doneDays++;
     }
   }
-  return { totalDays, doneDays, loggedDays, sum };
+  return { totalDays, doneDays, loggedDays, sum, skippedDays };
 }
 
 function habitStatPct(h, w) {
+  if (!w.totalDays) return null;
   const isWeeklyTotal = h.type === "scale" && h.mode === "weekly-total";
-  if (!w.totalDays) return 0;
   return Math.round(((isWeeklyTotal ? w.loggedDays : w.doneDays) / w.totalDays) * 100);
 }
 
@@ -1760,7 +1938,8 @@ function habitStatCardHtml(hRaw) {
   const avgVal = w.loggedDays ? w.sum / w.loggedDays : 0;
 
   let metaLine;
-  if (isCheck) metaLine = `${w.doneDays}/${w.totalDays} days done`;
+  if (!w.totalDays) metaLine = "on vacation the whole window";
+  else if (isCheck) metaLine = `${w.doneDays}/${w.totalDays} days done`;
   else if (isWeeklyTotal) metaLine = `${w.loggedDays}/${w.totalDays} days logged · avg ${fmt(avgVal, 1)} ${esc(h.unit)}`;
   else metaLine = `${w.doneDays}/${w.totalDays} days hit target · avg ${fmt(avgVal, 1)} ${esc(h.unit)}`;
 
@@ -1771,7 +1950,7 @@ function habitStatCardHtml(hRaw) {
 
   return `<div class="stat-card">
     <div class="stat-head"><strong>${esc(h.name)}</strong><span class="muted">${esc(h.unit || "check-off")}</span></div>
-    <div class="stat-bar-row"><div class="stat-bar"><div style="width:${pct}%"></div></div><span class="stat-pct">${pct}%</span></div>
+    <div class="stat-bar-row"><div class="stat-bar"><div style="width:${pct ?? 0}%"></div></div><span class="stat-pct">${pct === null ? "–" : pct + "%"}</span></div>
     <div class="stat-meta">${metaLine} <span class="muted">(last 30 days)</span></div>
     ${streaksHtml}
   </div>`;
@@ -1790,7 +1969,8 @@ function renderStats() {
     const w = habitStatsWindow(h, 30);
     return { h, w, pct: habitStatPct(h, w) };
   });
-  const avgPct = Math.round(perHabit.reduce((s, x) => s + x.pct, 0) / perHabit.length);
+  const withPct = perHabit.filter((x) => x.pct !== null);
+  const avgPct = withPct.length ? Math.round(withPct.reduce((s, x) => s + x.pct, 0) / withPct.length) : 0;
   const bestStreak = Math.max(0, ...state.habits.map((h) => streak(h)));
   const totalEntries = state.habits.reduce((s, h) => s + Object.keys(h.checks || {}).length + Object.keys(h.logs || {}).length, 0);
 

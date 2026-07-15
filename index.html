@@ -23,6 +23,7 @@
   <div class="data-actions">
     <button id="export-btn" title="Download all data as JSON">Export</button>
     <label class="import-label" title="Restore from a JSON export">Import<input type="file" id="import-input" accept=".json"></label>
+    <button id="vacation-btn" title="Pause habits over a date range">🏖 Vacation</button>
     <button id="settings-btn" title="Customise appearance">⚙ Customise</button>
   </div>
 </header>
@@ -139,6 +140,38 @@
   </div>
 </div>
 
+<div id="vacation-scrim" class="settings-scrim" hidden></div>
+<div id="vacation-modal" class="modal" hidden>
+  <div class="modal-inner vacation-modal-inner">
+    <h3>🏖 Vacation Mode</h3>
+    <p class="muted">Set a date range where selected habits are automatically skipped — no need to mark them off one by one. Skipped days don't break streaks or count against your stats.</p>
+
+    <div id="vacation-list" class="vacation-list"></div>
+
+    <h4 class="section-label">New vacation</h4>
+    <div class="vacation-range">
+      <label class="vacation-date-pill">
+        <span class="vacation-date-label">Start</span>
+        <input type="date" id="vacation-start">
+      </label>
+      <div class="vacation-range-bar"></div>
+      <label class="vacation-date-pill">
+        <span class="vacation-date-label">End</span>
+        <input type="date" id="vacation-end">
+      </label>
+    </div>
+    <input type="text" id="vacation-label" placeholder="Label (optional), e.g. Ibiza trip" class="vacation-label-input">
+
+    <h4 class="section-label">Habits to skip</h4>
+    <div id="vacation-habit-list" class="vacation-habit-list"></div>
+
+    <div class="modal-actions">
+      <button class="btn" id="vacation-submit-btn">Start vacation</button>
+      <button class="btn-link" id="vacation-cancel-btn">Close</button>
+    </div>
+  </div>
+</div>
+
 <main>
   <!-- TODAY / DASHBOARD -->
   <section id="tab-dashboard" class="tab active">
@@ -175,6 +208,16 @@
             <option value="scale">Scale (log a number)</option>
           </select>
         </label>
+      </div>
+
+      <div class="form-row">
+        <div class="field grow">
+          <span class="field-label">Is this a habit you want to build, or one you want to quit?</span>
+          <div class="segmented" id="habit-intent">
+            <button type="button" data-value="build" class="active">🎯 Build</button>
+            <button type="button" data-value="quit">🚫 Quit / avoid</button>
+          </div>
+        </div>
       </div>
 
       <div id="check-fields" class="form-row">
