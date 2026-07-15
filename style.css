@@ -969,3 +969,13 @@ button:active, .btn:active, .check-cell:active, .step-btn:active, .icon-btn:acti
   .goal-card:hover, .stat-card:hover { border-color: color-mix(in srgb, var(--border) 55%, var(--accent)); }
   .habit-card:hover { border-color: color-mix(in srgb, var(--border) 70%, var(--accent)); }
 }
+
+/* ---- subtle entrance animations for a more app-like feel ---- */
+@keyframes tabIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@keyframes modalIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes panelIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  .tab.active { animation: tabIn 0.18s ease; }
+  .modal:not([hidden]) .modal-inner { animation: modalIn 0.16s ease; }
+  .settings-panel:not([hidden]) .settings-panel-inner { animation: panelIn 0.2s ease; }
+}
