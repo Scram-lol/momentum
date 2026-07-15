@@ -116,6 +116,7 @@ nav#tabs button.active {
   border-color: var(--border);
   color: var(--text);
 }
+.tab-icon { display: none; }  /* desktop shows text labels only — unchanged */
 
 .data-actions { display: flex; gap: 8px; align-items: center; }
 .data-actions button, .import-label {
@@ -860,3 +861,42 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
 /* ---- font variants ---- */
 :root[data-font="mono"] { --font: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 :root[data-font="serif"] { --font: Georgia, "Iowan Old Style", "Times New Roman", serif; }
+
+/* ---- mobile: top tab row becomes a native-style bottom tab bar ---- */
+@media (max-width: 640px) {
+  nav#tabs {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    flex: none;
+    z-index: 50;
+    gap: 0;
+    justify-content: space-around;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    padding: 6px 2px;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.18);
+  }
+  nav#tabs button {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 4px 0;
+    border: none;
+    border-radius: 10px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  nav#tabs button.active { background: transparent; color: var(--accent); }
+  .tab-icon { display: block; font-size: 21px; line-height: 1; }
+  .tab-label { font-size: 10px; letter-spacing: 0.2px; }
+
+  /* keep page content clear of the fixed bar (covers compact mode too) */
+  main,
+  body.density-compact main { padding-bottom: calc(78px + env(safe-area-inset-bottom)); }
+  /* lift the backup nudge above the bar */
+  .backup-banner { bottom: calc(86px + env(safe-area-inset-bottom)); }
+}
