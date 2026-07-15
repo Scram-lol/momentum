@@ -951,3 +951,21 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
 .wk-lbl.wk-lbl-today { color: var(--accent); font-weight: 700; }
 .hc-summary { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
 .hc-actions { display: flex; flex-wrap: wrap; gap: 12px 14px; align-items: center; font-size: 13px; }
+
+/* ---- micro-interactions: make clicks/taps feel responsive on both platforms ---- */
+button, .btn, .btn-link, nav#tabs button, .check-cell, .step-btn, .icon-btn, .swatch,
+.funnel-row, .goal-card, .stat-card, .stat-tile, .wk-dot, .data-actions button,
+.import-label, .segmented button, .skip-btn, .vacation-habit-row {
+  transition: background-color 0.13s ease, border-color 0.13s ease, color 0.13s ease,
+              transform 0.08s ease, filter 0.13s ease, box-shadow 0.13s ease;
+}
+button:active, .btn:active, .check-cell:active, .step-btn:active, .icon-btn:active,
+.data-actions button:active, .import-label:active, .segmented button:active,
+.wk-dot:active, .swatch:active, .skip-btn:active {
+  transform: scale(0.93);
+}
+@media (hover: hover) {
+  .funnel-row:hover { transform: translateY(-1px); }
+  .goal-card:hover, .stat-card:hover { border-color: color-mix(in srgb, var(--border) 55%, var(--accent)); }
+  .habit-card:hover { border-color: color-mix(in srgb, var(--border) 70%, var(--accent)); }
+}

@@ -199,7 +199,8 @@ function inVacation(h, key) {
 // but only when nothing was actually logged; a real check/log always wins
 function isSkipped(h, key) {
   if (habitLoggedOnDay(h, key)) return false;
-  if (h.skips && h.skips[key]) return true;
+  if (h.skips && h.skips[key] === true) return true;
+  if (h.skips && h.skips[key] === false) return false; // explicit "act on it anyway" override
   return inVacation(h, key);
 }
 
@@ -645,8 +646,12 @@ function toggleSkip(habitId, key) {
   const h = state.habits.find((x) => x.id === habitId);
   if (!h) return;
   h.skips = h.skips || {};
-  if (h.skips[key]) {
-    delete h.skips[key];
+  if (isSkipped(h, key)) {
+    // Un-skip. If the day is only skipped because of a vacation, record an explicit
+    // "not skipped" override (false) so today can be acted on without ending the vacation;
+    // otherwise just drop the stored skip.
+    if (inVacation(h, key) && h.skips[key] !== true) h.skips[key] = false;
+    else delete h.skips[key];
   } else {
     h.skips[key] = true;
     delete h.checks[key];
