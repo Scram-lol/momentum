@@ -45,23 +45,34 @@ function defaults() {
 }
 
 function defaultProfile() {
-  return { weightKg: null, heightCm: null, age: null, sex: "male", activity: "light" };
+  return { weightKg: null, heightCm: null, age: null, sex: "male", activity: "light", bodyFatPct: null };
 }
 
 function normalizeProfile(p) {
   return Object.assign(defaultProfile(), p || {});
 }
 
+// matches calculator.net's calorie calculator activity scale
 const ACTIVITY_MULTIPLIERS = {
   sedentary: 1.2,
   light: 1.375,
-  moderate: 1.55,
-  active: 1.725,
-  very_active: 1.9,
+  moderate: 1.465,
+  active: 1.55,
+  very_active: 1.725,
+  extra_active: 1.9,
 };
 
-// Mifflin-St Jeor
+function usesKatchMcArdle(p) {
+  return isFinite(Number(p.bodyFatPct)) && Number(p.bodyFatPct) > 0 && Number(p.bodyFatPct) < 100;
+}
+
 function calcBMR(p) {
+  if (usesKatchMcArdle(p)) {
+    // Katch-McArdle — more accurate when body fat % is known
+    const leanMassKg = p.weightKg * (1 - Number(p.bodyFatPct) / 100);
+    return 370 + 21.6 * leanMassKg;
+  }
+  // Mifflin-St Jeor
   const base = 10 * p.weightKg + 6.25 * p.heightCm - 5 * p.age;
   return p.sex === "female" ? base - 161 : base + 5;
 }
@@ -1042,6 +1053,14 @@ function createFunnelFromTemplate(key) {
 
 let profileModalTargetFunnelId = null;
 
+function updateProfileFormulaNote() {
+  const bodyFatPct = document.getElementById("profile-bodyfat").value;
+  const note = usesKatchMcArdle({ bodyFatPct })
+    ? "Using the Katch-McArdle formula (based on lean body mass from your body fat %) — more accurate than weight/height alone."
+    : "Using the Mifflin-St Jeor formula. Add a body fat % above for a more accurate estimate.";
+  document.getElementById("profile-formula-note").textContent = note;
+}
+
 function openProfileModal(funnelId) {
   profileModalTargetFunnelId = funnelId || null;
   const p = state.profile;
@@ -1050,6 +1069,8 @@ function openProfileModal(funnelId) {
   document.getElementById("profile-age").value = p.age ?? "";
   document.getElementById("profile-sex").value = p.sex;
   document.getElementById("profile-activity").value = p.activity;
+  document.getElementById("profile-bodyfat").value = p.bodyFatPct ?? "";
+  updateProfileFormulaNote();
 
   const f = funnelId ? state.funnels.find((x) => x.id === funnelId) : null;
   document.getElementById("profile-gain").value = f ? f.goalValue : 8;
@@ -1060,6 +1081,8 @@ function openProfileModal(funnelId) {
   document.getElementById("profile-modal").hidden = false;
   document.getElementById("profile-scrim").hidden = false;
 }
+
+document.getElementById("profile-bodyfat").addEventListener("input", updateProfileFormulaNote);
 
 function closeProfileModal() {
   document.getElementById("profile-modal").hidden = true;
@@ -1076,11 +1099,13 @@ document.getElementById("profile-submit-btn").addEventListener("click", () => {
   const age = Number(document.getElementById("profile-age").value);
   const sex = document.getElementById("profile-sex").value;
   const activity = document.getElementById("profile-activity").value;
+  const bodyFatRaw = document.getElementById("profile-bodyfat").value;
+  const bodyFatPct = bodyFatRaw === "" ? null : Number(bodyFatRaw);
   const gain = Number(document.getElementById("profile-gain").value);
   const days = Number(document.getElementById("profile-days").value);
   if (!weightKg || !heightCm || !age || !gain || !days) { alert("Fill in all fields."); return; }
 
-  state.profile = { weightKg, heightCm, age, sex, activity };
+  state.profile = { weightKg, heightCm, age, sex, activity, bodyFatPct };
   const tdee = calcTDEE(state.profile);
 
   if (profileModalTargetFunnelId) {
