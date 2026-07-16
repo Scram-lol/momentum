@@ -316,8 +316,9 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
 /* ---- dashboard habit checklist ---- */
 .dash-habit-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
 }
@@ -950,6 +951,11 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
   .stage-row { grid-template-columns: 1fr 1fr auto auto auto; gap: 6px; }
   .stage-row .stage-label { grid-column: 1 / -1; }
   .stage-kind, .stage-value { min-width: 0; }
+
+  /* ---- minimalist scale logging: the +/- steppers are redundant next to a
+     tappable number field (mobile pops the numeric keypad anyway) ---- */
+  .scale-stepper .step-btn { display: none; }
+  .scale-stepper .scale-cell-inline { width: 60px; }
 }
 
 /* ---- mobile habit cards (replaces the wide 7-day table on phones) ---- */
@@ -962,7 +968,7 @@ td.skipped-cell input.scale-cell::placeholder { color: var(--muted); font-style:
 }
 .hc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .hc-name { font-size: 15px; font-weight: 600; }
-.hc-today { display: flex; align-items: center; gap: 10px; margin: 12px 0 2px; }
+.hc-today { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0 2px; }
 .wk-strip { display: flex; justify-content: space-between; gap: 4px; margin: 12px 0 8px; }
 .wk-day { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
 .wk-dot {
