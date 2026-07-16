@@ -181,7 +181,11 @@ const save = () => {
 
 function isDone(h, key) {
   if (h.type === "check") return !!h.checks[key];
-  if (h.mode === "daily-target") return (Number(h.logs[key]) || 0) >= h.dailyTarget;
+  if (h.mode === "daily-target") {
+    const logged = h.logs[key];
+    if (logged === undefined) return false;
+    return h.intent === "quit" ? Number(logged) <= h.dailyTarget : Number(logged) >= h.dailyTarget;
+  }
   return false;
 }
 
