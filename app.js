@@ -185,6 +185,7 @@ const save = () => {
 function isDone(h, key) {
   if (h.type === "check") return !!h.checks[key];
   if (h.mode === "daily-target") {
+    if (h.logs[key] === undefined && key > todayKey()) return false; // future day, nothing to default to 0
     const logged = h.logs[key] !== undefined ? Number(h.logs[key]) : 0;
     return h.intent === "quit" ? logged <= h.dailyTarget : logged >= h.dailyTarget;
   }
