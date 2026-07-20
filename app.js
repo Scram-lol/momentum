@@ -185,7 +185,9 @@ const save = () => {
 function isDone(h, key) {
   if (h.type === "check") return !!h.checks[key];
   if (h.mode === "daily-target") {
-    if (h.logs[key] === undefined && key > todayKey()) return false; // future day, nothing to default to 0
+    // outside the habit's lifetime, an unlogged day has no "0" to default to — future days
+    // haven't happened, and days before the habit existed were never being tracked
+    if (h.logs[key] === undefined && (key > todayKey() || key < h.created)) return false;
     const logged = h.logs[key] !== undefined ? Number(h.logs[key]) : 0;
     return h.intent === "quit" ? logged <= h.dailyTarget : logged >= h.dailyTarget;
   }
