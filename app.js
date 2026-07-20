@@ -185,9 +185,8 @@ const save = () => {
 function isDone(h, key) {
   if (h.type === "check") return !!h.checks[key];
   if (h.mode === "daily-target") {
-    const logged = h.logs[key];
-    if (logged === undefined) return false;
-    return h.intent === "quit" ? Number(logged) <= h.dailyTarget : Number(logged) >= h.dailyTarget;
+    const logged = h.logs[key] !== undefined ? Number(h.logs[key]) : 0;
+    return h.intent === "quit" ? logged <= h.dailyTarget : logged >= h.dailyTarget;
   }
   return false;
 }
@@ -979,7 +978,7 @@ function renderHabits() {
       if (isScale) {
         const val = hRaw.logs[key];
         html += `<td class="${skipped ? "skipped-cell" : ""}">${future ? '<span class="check-cell future">·</span>' :
-          `<input type="number" class="scale-cell" value="${val !== undefined ? val : ""}" step="any" min="0" placeholder="${skipped ? "skip" : "–"}" onchange="setScaleLog('${hRaw.id}','${key}',this.value)">`}</td>`;
+          `<input type="number" class="scale-cell" value="${val !== undefined ? val : ""}" step="any" min="0" placeholder="${skipped ? "skip" : "0"}" onchange="setScaleLog('${hRaw.id}','${key}',this.value)">`}</td>`;
       } else {
         const done = !!hRaw.checks[key];
         const cls = `check-cell ${done ? "done" : ""} ${done && h.intent === "quit" ? "quit-habit" : ""} ${skipped ? "skipped" : ""} ${future ? "future" : ""}`;
