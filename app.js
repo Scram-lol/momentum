@@ -103,6 +103,9 @@ function normalizeHabit(h) {
     type: "check",
     intent: "build",
     targetPerWeek: 7,
+    color: PALETTE[0],
+    scheduleMode: "count",
+    scheduleDays: [0, 1, 2, 3, 4, 5, 6],
     checks: {},
     logs: {},
     skips: {},
@@ -200,12 +203,20 @@ function inVacation(h, key) {
   return state.vacations.some((v) => v.habitIds.includes(h.id) && key >= v.start && key <= v.end);
 }
 
+// false only when the habit is pinned to specific weekdays and this day isn't one of them
+function isScheduledDay(h, key) {
+  if (h.scheduleMode !== "weekdays") return true;
+  const dow = (new Date(key).getDay() + 6) % 7; // Mon=0
+  return (h.scheduleDays || []).includes(dow);
+}
+
 // an "excused" day — doesn't count as a miss (streaks pass over it, stats exclude it) —
 // but only when nothing was actually logged; a real check/log always wins
 function isSkipped(h, key) {
   if (habitLoggedOnDay(h, key)) return false;
   if (h.skips && h.skips[key] === true) return true;
   if (h.skips && h.skips[key] === false) return false; // explicit "act on it anyway" override
+  if (!isScheduledDay(h, key)) return true;
   return inVacation(h, key);
 }
 
@@ -823,10 +834,27 @@ function unlinkHabit(id) {
   renderAll();
 }
 
+const DAY_LETTERS = ["M", "T", "W", "T", "F", "S", "S"];
+
+// how many days per week the habit is actually due — the count target itself
+// for "count" mode, or the number of pinned weekdays for "weekdays" mode
+function weeklyDueCount(h) {
+  return h.scheduleMode === "weekdays" ? (h.scheduleDays || []).length : h.targetPerWeek;
+}
+
+function scheduleLabel(h) {
+  if (h.scheduleMode === "weekdays") {
+    const days = h.scheduleDays || [];
+    if (days.length === 7) return "every day";
+    return days.slice().sort((a, b) => a - b).map((d) => DAY_LETTERS[d]).join("·") || "no days set";
+  }
+  return `${h.targetPerWeek}×/wk`;
+}
+
 function habitMetaLabel(h) {
-  if (h.type === "check") return `target ${h.targetPerWeek}×/wk`;
+  if (h.type === "check") return `target ${scheduleLabel(h)}`;
   if (h.mode === "weekly-total") return `${fmt(h.weeklyTarget, 1)} ${esc(h.unit)}/wk`;
-  return `${fmt(h.dailyTarget, 1)} ${esc(h.unit)}/day, ${h.targetPerWeek}×/wk`;
+  return `${fmt(h.dailyTarget, 1)} ${esc(h.unit)}/day, ${scheduleLabel(h)}`;
 }
 
 function isMobileView() {
@@ -847,7 +875,7 @@ function habitCardHtml(hRaw, days, tk) {
   }
 
   const quitTag = h.intent === "quit" ? `<span class="quit-tag">🚫 quitting</span>` : "";
-  const dayLetters = ["M", "T", "W", "T", "F", "S", "S"];
+  const dayLetters = DAY_LETTERS;
   const strip = days.map((d, i) => {
     const key = dateKey(d);
     const future = key > tk;
@@ -889,7 +917,7 @@ function habitCardHtml(hRaw, days, tk) {
     weekSummary = `${fmt(sum, 1)}/${fmt(h.weeklyTarget, 1)} ${esc(h.unit)} this week`;
   } else {
     const cnt = days.filter((d) => isDone(h, dateKey(d))).length;
-    weekSummary = `${cnt}/${h.targetPerWeek} this week · <span class="streak-badge">🔥 ${streak(h)}</span>`;
+    weekSummary = `${cnt}/${weeklyDueCount(h)} this week · <span class="streak-badge">🔥 ${streak(h)}</span>`;
   }
 
   const skipBtn = `<button class="btn-link" onclick="toggleSkip('${hRaw.id}','${tk}')">${skippedToday ? "↺ Unskip" : "⏭ Skip today"}</button>`;
@@ -967,7 +995,7 @@ function renderHabits() {
       html += `<td><span class="week-frac">${esc(h.unit)}/wk</span></td>`;
     } else {
       const cnt = days.filter((d) => isDone(h, dateKey(d))).length;
-      html += `<td class="habit-meta">${cnt}/${h.targetPerWeek}</td>`;
+      html += `<td class="habit-meta">${cnt}/${weeklyDueCount(h)}</td>`;
       html += `<td><span class="streak-badge">🔥 ${streak(h)}</span></td>`;
     }
     html += `<td><button class="delete-btn" onclick="deleteHabit('${hRaw.id}')" title="Delete">✕</button></td></tr>`;
