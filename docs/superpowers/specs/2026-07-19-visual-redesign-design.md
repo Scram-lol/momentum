@@ -1,4 +1,4 @@
-# Momentum visual redesign — per-habit colour, icon, tighter Today row
+# Momentum visual redesign — per-habit colour, icon, tighter Today row, and finishing weekday scheduling
 
 ## Context
 
@@ -8,18 +8,30 @@ Alfie opened the native macOS app **Habit** and asked Claude to take inspiration
 - No icon/emoji per habit.
 - Today rows for scale habits wrap across multiple lines (label, unit/target text, input, Skip button all competing), unlike Habit's clean icon + name + right-aligned progress single-line rows.
 
-Momentum's memory (`momentum-app.md`) records explicit prior feedback from Alfie: after several rounds of feature additions, he asked for the app to stay **simplistic, minimalist, not cluttered**. Habit itself is a much busier, more gamified app (mood tracker, stress meter, daily quotes, streak crowns, social/accountability features). This spec deliberately scopes to a **visual-only pass** — colour, icon, and layout tidying on existing screens — with no new tabs, concepts, or always-on chrome. Feature-shaped ideas from Habit (mood tracking, yearly per-habit heatmap, weekday-specific scheduling, gamification badges, accountability partners) are explicitly out of scope here and would need their own separate spec.
+Momentum's memory (`momentum-app.md`) records explicit prior feedback from Alfie: after several rounds of feature additions, he asked for the app to stay **simplistic, minimalist, not cluttered**. Habit itself is a much busier, more gamified app (mood tracker, stress meter, daily quotes, streak crowns, social/accountability features). This spec deliberately scopes to a **visual-only pass** — colour, icon, and layout tidying on existing screens — with no new tabs, concepts, or always-on chrome. Feature-shaped ideas from Habit (mood tracking, yearly per-habit heatmap, gamification badges, accountability partners) remain out of scope and would need their own separate spec.
 
-Three approaches were considered (colour+icon+layout / full card-and-theme overhaul / colour-only); the first was chosen as the best payoff-to-risk ratio — additive and cosmetic, so it can't reopen the feature-creep problem the prior feedback was about.
+Three approaches were considered for the visual pass (colour+icon+layout / full card-and-theme overhaul / colour-only); the first was chosen as the best payoff-to-risk ratio — additive and cosmetic, so it can't reopen the feature-creep problem the prior feedback was about.
 
-## Pre-existing state to build on, not disturb
+One exception to the "visual-only" framing, decided explicitly by Alfie: **weekday-specific habit scheduling** (see next section) is folded into this same pass, since the groundwork already exists unfinished in the codebase and leaving it half-built serves no one.
 
-`momentum/app.js` currently has **uncommitted, unfinished changes** already on disk (not made by this session): a partial weekday-specific scheduling feature (`scheduleMode`, `scheduleDays`, `isScheduledDay()`, `weeklyDueCount()`, `scheduleLabel()`) and a stub `color: PALETTE[0]` default in `normalizeHabit()`. There is no UI wired up for the scheduling half yet.
+## Pre-existing state: finishing it, not disturbing it silently
 
-This redesign:
+`momentum/app.js` currently has **uncommitted changes** already on disk (not made by this session, origin unknown): a partial weekday-specific scheduling feature — `scheduleMode` (`"count"` default, or `"weekdays"`), `scheduleDays` (array of weekday indices, Mon=0..Sun=6), and helpers `isScheduledDay()`, `weeklyDueCount()`, `scheduleLabel()` — already wired into `isSkipped()`, `habitCardHtml()`, `renderHabits()`, and `habitMetaLabel()`. There is no edit-form UI anywhere that sets `scheduleMode`/`scheduleDays`, so every habit stays on the `"count"` default and this code is currently dead in practice. A stub `color: PALETTE[0]` default also already exists in `normalizeHabit()`.
+
+This pass:
 - **Completes and uses** the existing `color: PALETTE[0]` stub (turning it into a cycling default — see below) rather than duplicating it.
-- **Does not touch** the weekday-scheduling scaffolding (`scheduleMode`/`scheduleDays`/`isScheduledDay`/`weeklyDueCount`/`scheduleLabel`) — it's unrelated, unfinished, and out of scope for a visual-only pass.
-- Should **not be committed silently bundled with** the pre-existing uncommitted scheduling work — that work predates this session and its disposition is Alfie's call, not something to fold into this commit.
+- **Finishes the weekday-scheduling feature** by adding the missing edit-form UI (see new section below) so `scheduleMode`/`scheduleDays` become genuinely settable — completing work that was already half-done rather than leaving it as unreachable dead code.
+- Everything else pre-existing and unrelated stays as found.
+
+## Weekday-specific scheduling (new section — completes existing scaffolding)
+
+Add a day-picker to the check-habit edit form (`habitEditFormHtml()`), alongside the existing "Target" dropdown (`cadenceOptionsHtml()`, currently only offers "Every day" / "N× per week" counts):
+
+- The Target field gains a mode toggle: **count-based** (existing `targetPerWeek` dropdown, unchanged default) vs **specific days** (new). Selecting "specific days" reveals seven toggle buttons (M T W T F S S, reusing the existing `DAY_LETTERS` order) — active days are stored in `scheduleDays`, and `scheduleMode` is set to `"weekdays"`.
+- Saving (`saveHabitEdit()`) writes `scheduleMode`/`scheduleDays` alongside the existing fields. Switching back to count-based mode sets `scheduleMode` back to `"count"` (existing default) without deleting `scheduleDays`, so toggling back and forth doesn't lose the last-picked days.
+- No changes to `isScheduledDay()`, `weeklyDueCount()`, `scheduleLabel()`, or their call sites (`isSkipped()`, `habitCardHtml()`, `renderHabits()`, `habitMetaLabel()`) — that logic already does the right thing once the fields are actually set; this section only adds the missing input.
+- Scale-type habits are unaffected — weekday scheduling is a check-habit concept only (scale habits already have their own daily-target/weekly-total cadence via `mode`/`dailyTarget`/`weeklyTarget`), matching how the pre-existing scaffolding is scoped (`habitMetaLabel()` only calls `scheduleLabel()` in the `h.type === "check"` branch).
+- Structural edits to schedule (mode or days changing) go through the existing `diffAndLog()`/edit-history mechanism like other structural habit edits (title, target, colour), since that's already how `saveHabitEdit()` handles this class of change.
 
 ## Data model changes
 
@@ -52,7 +64,6 @@ This is a CSS/markup restyle of the existing row, not a new component — no new
 ## Explicitly out of scope
 
 - Mood tracker, stress meter, daily quote card, streak-crown gamification, group/accountability features, yearly per-habit contribution heatmap — all feature-shaped ideas from Habit, deferred to a future separate spec if Alfie wants them.
-- The pre-existing uncommitted weekday-scheduling scaffolding in `app.js` — left untouched.
 - Any change to the customise/theme/density/accent system.
 
 ## Verification plan
@@ -62,3 +73,4 @@ This is a CSS/markup restyle of the existing row, not a new component — no new
 3. Confirm each habit shows a distinct, consistent colour across all four views, and that a custom icon (set on at least one demo habit) renders correctly with the glyph fallback still working on habits without one.
 4. Repeat the same check with the light theme toggled on (Settings → Customise) to confirm colour contrast/readability holds in both themes.
 5. Confirm no console errors and that existing interactions (check-off, stepper +/-, Skip, Edit) still work unchanged.
+6. Set a check habit to "specific days" with a subset of weekdays picked; confirm the Today list, Habits grid, and stats correctly treat non-picked days as excused (not a miss) — reusing the existing `isSkipped()`/`isScheduledDay()` logic — and that `scheduleLabel()`'s "M·W·F"-style output shows correctly wherever habit meta text renders. Toggle back to count-based mode and confirm the previously-picked days are preserved if switched again.
